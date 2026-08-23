@@ -37,15 +37,20 @@ importa/             # Scripts de ingesta (uno por recurso de origen).
 ├── db.py            # Conexión psycopg (SQL puro, sin ORM).
 └── estaciones.py     # Job: inventario de estaciones (spec/importa/ESTACIONES.md).
 control/             # Panel de control (SPA + API). Ver spec/control/.
-└── backend/          # API FastAPI (capas servicio + DAO), entorno virtual
-                      # y requirements.txt propios, independiente del resto.
-    ├── main.py        # Arranque FastAPI, monta el router de cada módulo.
-    ├── core/           # Transversal: config (.env), conexión a Postgres,
-                        # validación de sesión (core/auth.py).
-    └── modulos/        # Un módulo = una carpeta (seguridad, estaciones, ...),
-                        # cada una con router.py/servicio.py/dao.py/esquemas.py.
-                        # control/frontend/ (SPA React, spec/control/core.md)
-                        # todavía no implementado.
+├── backend/          # API FastAPI (capas servicio + DAO), entorno virtual
+│                     # y requirements.txt propios, independiente del resto.
+│   ├── main.py        # Arranque FastAPI, monta el router de cada módulo.
+│   ├── core/           # Transversal: config (.env), conexión a Postgres,
+│                       # validación de sesión (core/auth.py).
+│   └── modulos/        # Un módulo = una carpeta (seguridad, estaciones, ...),
+│                       # cada una con router.py/servicio.py/dao.py/esquemas.py.
+└── frontend/         # SPA React (Vite), node_modules propio, independiente.
+    ├── vite.config.js  # Proxy de /api hacia control/backend en desarrollo.
+    └── src/
+        ├── app/         # Transversal: Layout (menú lateral), Login,
+        │                # RequireAuth (guard de sesión), apiClient.
+        └── modulos/      # Un módulo = una carpeta (seguridad, estaciones, ...),
+                          # con sus pantallas y su <modulo>Api.js.
 spec/                # Especificación del proyecto (ver arriba).
 docker-compose.yml   # PostgreSQL local de desarrollo.
 .env                 # Variables de entorno (no versionado).
@@ -54,16 +59,17 @@ docker-compose.yml   # PostgreSQL local de desarrollo.
 Cada job de importación futuro (valores climatológicos diarios, etc.)
 añade su propio módulo dentro de `importa/`, reutilizando
 `aemet_client.py` y `db.py`. Cada módulo futuro del panel de control
-añade su propia carpeta dentro de `control/backend/modulos/` (y,
-cuando exista, `control/frontend/src/modulos/`), siguiendo el patrón
-fijado por el módulo `estaciones` (ver `spec/control/core.md`).
+añade su propia carpeta dentro de `control/backend/modulos/` y
+`control/frontend/src/modulos/`, siguiendo el patrón fijado por el
+módulo `estaciones` (ver `spec/control/core.md`).
 
 ## Setup / entorno
 
 - **Gestor de dependencias:** `pip` + `venv` (un único `.venv/` en la
   raíz del proyecto para `db/`/`importa/`, no versionado).
   `control/backend/` tiene su propio `.venv/` independiente (ver
-  `spec/control/core.md`), también no versionado.
+  `spec/control/core.md`), también no versionado. `control/frontend/`
+  usa `npm` con su propio `node_modules/` (no versionado).
 - **Variables de entorno** (fichero `.env` en la raíz, no versionado,
   compartido por `db/`, `importa/` y `control/backend/`):
   - `AEMET_API_KEY` — API key de AEMET OpenData.
@@ -89,6 +95,11 @@ fijado por el módulo `estaciones` (ver `spec/control/core.md`).
   source .venv/bin/activate
   pip install -r requirements.txt
   ```
+  Para `control/frontend/`:
+  ```
+  cd control/frontend
+  npm install
+  ```
 
 ## Comandos habituales
 
@@ -100,6 +111,9 @@ fijado por el módulo `estaciones` (ver `spec/control/core.md`).
 - `cd control/backend && uvicorn main:app --reload` — arrancar la API
   del panel de control en desarrollo (con el `.venv` propio de
   `control/backend/` activado).
+- `cd control/frontend && npm run dev` — arrancar la SPA del panel de
+  control en desarrollo (necesita el backend arrancado en paralelo,
+  ver `control/frontend/README.md`).
 
 ## Convenciones de código
 
