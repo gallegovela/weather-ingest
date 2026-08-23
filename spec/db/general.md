@@ -175,15 +175,28 @@ con `docker-compose.yml` (raíz del proyecto), con credenciales que
 coinciden con `DATABASE_URL` en `.env`. Aún no hay un servidor de
 producción.
 
-## Pendiente de definir
+## Entornos, permisos y backups — decidido
 
-- Gestión de entornos (local / test / producción): ¿un único
-  `DATABASE_URL` por entorno vía `.env` distinto, o soporte de
-  múltiples entornos dentro del mismo `alembic.ini`?
-- Usuario y permisos de PostgreSQL con los que se ejecutan las
-  migraciones (¿el mismo usuario que usa la app para leer/escribir,
-  o uno con más privilegios solo para DDL?).
-- Estrategia de backups / rollback en producción más allá de
-  `alembic downgrade`.
-- Servidor PostgreSQL de producción (el actual, vía Docker Compose,
-  es solo de desarrollo local).
+- **Gestión de entornos:** un único `DATABASE_URL` activo vía `.env`,
+  sin soporte de múltiples entornos dentro del mismo `alembic.ini`.
+  Local hoy, producción cuando exista un servidor; si en el futuro se
+  necesita una base de datos de test, se resuelve con un `.env.test`
+  cargado explícitamente, sin que "entorno" sea un concepto que
+  Alembic tenga que conocer.
+- **Usuario y permisos de PostgreSQL:** un único usuario compartido
+  entre migraciones y aplicación (el mismo que ya usa
+  `docker-compose.yml`, `weather`/`weather` en local). No se separa un
+  usuario con privilegios de DDL de otro de solo lectura/escritura en
+  runtime: esa separación no se justifica sin varios desarrolladores
+  operando sobre la base de datos ni un requisito explícito de mínimo
+  privilegio.
+- **Backups:** no se implementa ninguna estrategia de backup/restore
+  por ahora. Los datos del proyecto son recuperables (reimportables
+  desde la API de AEMET), así que no se justifica esa complejidad
+  adicional en este momento.
+- **Servidor PostgreSQL de producción:** mismo patrón que en local —
+  un contenedor `postgres` más añadido al `docker-compose.yml` del
+  servidor de destino, coherente con la decisión de contenedorizar
+  `control/backend/` y `control/frontend/` (ver
+  [`spec/control/core.md`](../control/core.md)), no un servicio
+  gestionado externo (RDS, Cloud SQL, etc.).

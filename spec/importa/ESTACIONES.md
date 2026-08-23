@@ -112,6 +112,12 @@ Notas:
 - Se registra cuándo fue la primera vez que se vio una estación y
   cuándo fue la última vez que se actualizó (ver columnas de
   auditoría en `spec/db/tables.md`).
+- **Histórico de cambios — decidido:** antes de sobreescribir una
+  estación cuyos datos (`nombre`, `provincia`, `latitud`, `longitud`,
+  `altitud`, `indsinop`) han cambiado respecto a lo ya almacenado, se
+  guarda una copia del estado anterior en `estaciones_historico` (ver
+  `spec/db/tables.md`). No se guarda histórico en altas (estaciones
+  nuevas) ni cuando el upsert no cambia ningún dato.
 
 ## Flujo del script (resumen)
 
@@ -131,10 +137,15 @@ Script en `importa/estaciones.py`, apoyado en `importa/aemet_client.py`
 (patrón de dos pasos + decodificación) e `importa/db.py` (conexión
 `psycopg` v3, sin ORM). Ejecución: `python -m importa.estaciones`.
 
-## Pendiente de definir
+## Decisiones adicionales
 
-- Política de reintentos ante fallos de red o de la API.
-- Si se necesita conservar histórico de cambios por estación (ej.
-  cambio de ubicación/altitud) o basta con el estado actual.
-- Programación periódica (cron/scheduler) una vez definido el
-  mecanismo de ejecución del proyecto.
+- **Reintentos — decidido: no se implementan por ahora.** Ante un
+  fallo de red o de la API el script simplemente falla; al ser una
+  ejecución bajo demanda (no un proceso desatendido), se relanza a
+  mano si hace falta.
+- **Histórico de cambios — decidido: sí.** Ver "Estrategia de carga"
+  y la tabla `estaciones_historico` en `spec/db/tables.md`.
+- **Programación periódica (cron/scheduler) — pospuesto.** Se
+  abordará al final del proyecto, una vez el resto de jobs de
+  importación y el panel de control estén implementados, cuando haya
+  una visión completa de qué necesita ejecutarse periódicamente.
