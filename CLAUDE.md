@@ -36,6 +36,16 @@ importa/             # Scripts de ingesta (uno por recurso de origen).
 ├── aemet_client.py  # Cliente genérico del patrón de dos pasos de AEMET.
 ├── db.py            # Conexión psycopg (SQL puro, sin ORM).
 └── estaciones.py     # Job: inventario de estaciones (spec/importa/ESTACIONES.md).
+control/             # Panel de control (SPA + API). Ver spec/control/.
+└── backend/          # API FastAPI (capas servicio + DAO), entorno virtual
+                      # y requirements.txt propios, independiente del resto.
+    ├── main.py        # Arranque FastAPI, monta el router de cada módulo.
+    ├── core/           # Transversal: config (.env), conexión a Postgres,
+                        # validación de sesión (core/auth.py).
+    └── modulos/        # Un módulo = una carpeta (seguridad, estaciones, ...),
+                        # cada una con router.py/servicio.py/dao.py/esquemas.py.
+                        # control/frontend/ (SPA React, spec/control/core.md)
+                        # todavía no implementado.
 spec/                # Especificación del proyecto (ver arriba).
 docker-compose.yml   # PostgreSQL local de desarrollo.
 .env                 # Variables de entorno (no versionado).
@@ -43,17 +53,26 @@ docker-compose.yml   # PostgreSQL local de desarrollo.
 
 Cada job de importación futuro (valores climatológicos diarios, etc.)
 añade su propio módulo dentro de `importa/`, reutilizando
-`aemet_client.py` y `db.py`.
+`aemet_client.py` y `db.py`. Cada módulo futuro del panel de control
+añade su propia carpeta dentro de `control/backend/modulos/` (y,
+cuando exista, `control/frontend/src/modulos/`), siguiendo el patrón
+fijado por el módulo `estaciones` (ver `spec/control/core.md`).
 
 ## Setup / entorno
 
 - **Gestor de dependencias:** `pip` + `venv` (un único `.venv/` en la
-  raíz del proyecto, no versionado).
-- **Variables de entorno** (fichero `.env` en la raíz, no versionado):
+  raíz del proyecto para `db/`/`importa/`, no versionado).
+  `control/backend/` tiene su propio `.venv/` independiente (ver
+  `spec/control/core.md`), también no versionado.
+- **Variables de entorno** (fichero `.env` en la raíz, no versionado,
+  compartido por `db/`, `importa/` y `control/backend/`):
   - `AEMET_API_KEY` — API key de AEMET OpenData.
   - `DATABASE_URL` — cadena de conexión a PostgreSQL, formato
     SQLAlchemy con el driver `psycopg` v3 explícito:
     `postgresql+psycopg://usuario:password@host:5432/bd`.
+  - `CONTROL_SESSION_TTL_MINUTOS` — minutos de validez de una sesión
+    del panel de control desde el login, sin renovación (por defecto
+    `15` si no se define — ver `spec/control/core.md`).
 - **Base de datos local:** `docker-compose.yml` levanta un PostgreSQL
   de desarrollo con las credenciales que ya están en `.env`
   (`weather`/`weather`/`weather`). Arrancar con `docker compose up -d`.
@@ -63,6 +82,13 @@ añade su propio módulo dentro de `importa/`, reutilizando
   pip install -r db/requirements.txt
   pip install -r importa/requirements.txt
   ```
+  Para `control/backend/` (entorno virtual propio):
+  ```
+  cd control/backend
+  python -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+  ```
 
 ## Comandos habituales
 
@@ -71,6 +97,9 @@ añade su propio módulo dentro de `importa/`, reutilizando
   (ver `spec/db/general.md` para el resto de comandos de `migrate.py`).
 - `python -m importa.estaciones` — importar/actualizar el inventario
   de estaciones climatológicas de AEMET.
+- `cd control/backend && uvicorn main:app --reload` — arrancar la API
+  del panel de control en desarrollo (con el `.venv` propio de
+  `control/backend/` activado).
 
 ## Convenciones de código
 
