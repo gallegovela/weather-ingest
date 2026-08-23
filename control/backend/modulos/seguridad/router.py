@@ -13,7 +13,7 @@ from core.auth import COOKIE_NAME, UsuarioActual, usuario_actual
 from core.db import get_db
 from core.esquemas import Listado
 from modulos.seguridad import servicio
-from modulos.seguridad.esquemas import LoginRequest, UsuarioCrear, UsuarioEditar, UsuarioOut
+from modulos.seguridad.esquemas import LoginRequest, SesionOut, UsuarioCrear, UsuarioEditar, UsuarioOut
 
 router = APIRouter(prefix="/api/seguridad", tags=["seguridad"])
 
@@ -40,6 +40,14 @@ def cerrar_sesion(
         servicio.logout(conn, control_session)
     response.delete_cookie(COOKIE_NAME)
     return {"detail": "ok"}
+
+
+@router.get("/sesion", response_model=SesionOut)
+def obtener_sesion(usuario: UsuarioActual = Depends(usuario_actual)):
+    # Usado por control/frontend/ como guard de sesión (¿hay sesión válida?)
+    # y para conocer el id del usuario logado (ocultar "eliminar" sobre uno
+    # mismo, ver spec/control/module/seguridad.md).
+    return SesionOut(id=usuario.id, login=usuario.login)
 
 
 @router.get("/usuarios", response_model=Listado[UsuarioOut])

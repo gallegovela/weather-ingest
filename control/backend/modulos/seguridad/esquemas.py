@@ -28,3 +28,8 @@ class UsuarioCrear(BaseModel):
 class UsuarioEditar(BaseModel):
     login: EmailStr | None = None
     contrasena: str | None = None
+
+
+class SesionOut(BaseModel):
+    id: int
+    login: str
