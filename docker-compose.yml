@@ -1,5 +1,9 @@
-# PostgreSQL local de desarrollo para el proyecto weather.
-# Las credenciales coinciden con DATABASE_URL en .env (ver spec/db/general.md).
+# Servicios del proyecto weather. `postgres` es la base de datos local
+# de desarrollo (credenciales coinciden con DATABASE_URL en .env, ver
+# spec/db/general.md). `control-backend` y `control-frontend` son el
+# panel de control, contenedorizados según spec/control/core.md,
+# "Despliegue": el enrutado externo hacia ellos (dominio, TLS) lo hace
+# el nginx del servidor de destino, gestionado fuera de este proyecto.
 services:
   postgres:
     image: postgres:16
@@ -12,6 +16,28 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  control-backend:
+    build: ./control/backend
+    restart: unless-stopped
+    environment:
+      # Dentro de la red de docker-compose, postgres se resuelve por
+      # nombre de servicio en vez de localhost (ver spec/db/general.md
+      # para el resto del DSN, credenciales de docker-compose).
+      DATABASE_URL: postgresql+psycopg://weather:weather@postgres:5432/weather
+      CONTROL_SESSION_TTL_MINUTOS: ${CONTROL_SESSION_TTL_MINUTOS:-15}
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+  control-frontend:
+    build: ./control/frontend
+    restart: unless-stopped
+    depends_on:
+      - control-backend
+    ports:
+      - "8080:80"
 
 volumes:
   postgres_data:
