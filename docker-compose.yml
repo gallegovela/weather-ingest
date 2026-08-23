@@ -1,0 +1,17 @@
+# PostgreSQL local de desarrollo para el proyecto weather.
+# Las credenciales coinciden con DATABASE_URL en .env (ver spec/db/general.md).
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: weather
+      POSTGRES_PASSWORD: weather
+      POSTGRES_DB: weather
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
