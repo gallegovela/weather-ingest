@@ -45,9 +45,13 @@ db/                  # Self-contained database build module (Alembic).
 ingest/              # Ingestion scripts (one per source resource).
 ├── requirements.txt # Dependencies specific to the ingest module.
 ├── config.py        # .env loading (DATABASE_URL; AEMET_API_KEY lives in config_values, see spec/db/tables.md).
-├── aemet_client.py  # Generic client for AEMET's two-step pattern.
-├── db.py            # psycopg connection (plain SQL, no ORM).
-└── stations.py       # Job: station inventory (spec/ingest/STATIONS.md).
+├── aemet_client.py  # Generic client for AEMET's two-step pattern (+429 retry/backoff).
+├── db.py            # psycopg connection (plain SQL, no ORM) + config_values reads.
+├── stations.py       # Job: station inventory (spec/ingest/STATIONS.md).
+├── daily_values.py    # Job: daily climatological values (spec/ingest/DAILY_VALUES.md).
+├── worker.py          # Job queue worker, drains ingest_jobs (spec/ingest/general.md).
+├── Dockerfile          # ingest-worker image (build context: project root, see Dockerfile).
+└── tests/              # pytest, see spec/testing.md.
 control/             # Control panel (SPA + API). See spec/control/.
 ├── backend/          # FastAPI API (service + DAO layers), own virtual
 │                     # environment and requirements.txt, independent
@@ -125,6 +129,14 @@ following the pattern set by the `stations` module (see
   `spec/db/general.md` for the rest of `migrate.py` commands).
 - `python -m ingest.stations` — import/update the AEMET
   climatological station inventory.
+- `python -m ingest.daily_values --station <code> --from <date> --to <date>` —
+  manually run a daily values import (normally queued from the panel
+  instead, see `spec/control/module/jobs.md`).
+- `python -m ingest.worker` — run the job queue worker locally
+  (normally runs in the `ingest-worker` container, see
+  `spec/ingest/general.md`).
+- `pytest ingest/tests/` — run `ingest/`'s unit tests (see
+  `spec/testing.md`).
 - `cd control/backend && uvicorn main:app --reload` — start the
   control panel API in development (with `control/backend/`'s own
   `.venv` activated).

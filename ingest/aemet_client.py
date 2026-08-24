@@ -6,12 +6,20 @@ actual content, served as ISO-8859-15 (not UTF-8).
 """
 
 import json
+import time
 
 import requests
 
 from ingest import db
 
 TIMEOUT = 30
+
+# A rate-limit hit (estado 429) is routine for jobs that make several
+# requests (see spec/ingest/DAILY_VALUES.md), so it's retried with a
+# fixed backoff instead of failing immediately like any other AEMET
+# error does.
+RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_BACKOFF_SECONDS = 65
 
 _api_key_cache: str | None = None
 
@@ -30,21 +38,37 @@ def _api_key() -> str:
     return _api_key_cache
 
 
+def _request_envelope(endpoint: str) -> dict:
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        response = requests.get(
+            endpoint, headers={"api_key": _api_key()}, timeout=TIMEOUT
+        )
+        response.raise_for_status()
+        envelope = response.json()
+
+        if envelope.get("estado") == 429:
+            if attempt == RATE_LIMIT_RETRIES:
+                break
+            time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+            continue
+
+        if envelope.get("estado") != 200:
+            raise AemetError(
+                f"Unexpected response from AEMET: estado={envelope.get('estado')} "
+                f"descripcion={envelope.get('descripcion')!r}"
+            )
+        return envelope
+
+    raise AemetError(
+        f"AEMET rate limit (estado=429) still hit after {RATE_LIMIT_RETRIES} retries."
+    )
+
+
 def fetch(endpoint: str) -> list | dict:
     """Runs AEMET's two-step pattern and returns the already correctly
     decoded JSON (ISO-8859-15 -> str -> json)."""
 
-    response = requests.get(
-        endpoint, headers={"api_key": _api_key()}, timeout=TIMEOUT
-    )
-    response.raise_for_status()
-    envelope = response.json()
-
-    if envelope.get("estado") != 200:
-        raise AemetError(
-            f"Unexpected response from AEMET: estado={envelope.get('estado')} "
-            f"descripcion={envelope.get('descripcion')!r}"
-        )
+    envelope = _request_envelope(endpoint)
 
     data_url = envelope.get("datos")
     if not data_url:

@@ -3,7 +3,9 @@
 # spec/db/general.md). `control-backend` and `control-frontend` are
 # the control panel, containerized per spec/control/core.md,
 # "Deployment": external routing to them (domain, TLS) is done by the
-# target server's nginx, managed outside this project.
+# target server's nginx, managed outside this project. `ingest-worker`
+# drains the ingest_jobs queue (spec/ingest/general.md) -- no ports
+# exposed, it isn't a service other containers or clients talk to.
 services:
   postgres:
     image: postgres:16
@@ -30,6 +32,16 @@ services:
       - postgres
     ports:
       - "8000:8000"
+
+  ingest-worker:
+    build:
+      context: .
+      dockerfile: ingest/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://weather:weather@postgres:5432/weather
+    depends_on:
+      - postgres
 
   control-frontend:
     build: ./control/frontend
