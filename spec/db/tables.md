@@ -162,6 +162,70 @@ Natural key: `key`.
   positive integer) — to be decided as each key is added, documented
   in the spec of whichever module/process introduces it.
 
+## Table `ingest_jobs`
+
+Queue of ingestion runs, one row per run requested from the control
+panel's Jobs module (see
+[`spec/control/module/jobs.md`](../control/module/jobs.md)) and
+processed by the ingest job worker (see
+[`spec/ingest/general.md`](../ingest/general.md)). Like `config_values`,
+it's **not** a panel-specific table (no `control_` prefix): it's
+written by `control/backend/` but read and updated by the worker
+process in `ingest/`, so it's treated as a business/shared table, per
+the naming criteria in `spec/control/core.md`.
+
+No natural key: each row is a job execution request, not an entity.
+
+| Column          | Type        | Null | Description                                                                 |
+|-----------------|-------------|------|--------------------------------------------------------------------------------|
+| `id`            | `bigint`    | No   | Auto-numbered technical identifier (primary key).                            |
+| `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`).      |
+| `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`). |
+| `status`        | `varchar`   | No   | One of `pending`, `running`, `success`, `error`. Defaults to `pending`.        |
+| `created_at`    | `timestamp` | No   | Date/time the job was queued.                                                 |
+| `started_at`    | `timestamp` | Yes  | Date/time the worker claimed the job.                                         |
+| `finished_at`   | `timestamp` | Yes  | Date/time the job finished (success or error).                                |
+| `rows_inserted` | `integer`   | Yes  | Rows inserted by the run, filled in by the worker when it finishes.           |
+| `rows_updated`  | `integer`   | Yes  | Rows updated by the run, filled in by the worker when it finishes.            |
+| `error_message` | `varchar`   | Yes  | Error detail, filled in by the worker if the run fails.                       |
+
+### Design notes
+
+- **Technical primary key**: same criteria as `stations_history` — each
+  row is an event (a requested run), not an entity with its own
+  natural identity.
+- **`params` as `jsonb` instead of typed columns**: different job
+  types need different parameters (`stations` needs none;
+  `daily_values` needs a station and a date range; future job types
+  will need whatever they need). A single flexible column lets the
+  worker poll one table regardless of job type, and lets new
+  ingestion scripts be added without a schema migration — only a new
+  `job_type` value and its own dispatch logic in the worker (see
+  `spec/ingest/general.md`).
+- **`job_type` and `status` aren't DB-enforced (no `CHECK`/enum)**:
+  same criteria as `control_users.login`'s email format — validated in
+  the application layer (the jobs module's service when creating a
+  job; the worker when transitioning status), not with a database
+  constraint.
+- **Claiming pattern**: the worker claims the oldest `pending` job with
+  `SELECT ... WHERE status = 'pending' ORDER BY created_at LIMIT 1 FOR
+  UPDATE SKIP LOCKED`, then updates it to `running` in the same
+  transaction. This keeps things correct even if more than one worker
+  process is ever run, though today there's only one (see
+  `spec/ingest/general.md`).
+- **No edit, no delete**: a job represents a specific request; there's
+  no screen to change its parameters after creation (queue a new job
+  instead — see `spec/control/module/jobs.md`) or to remove it from
+  the table. Rows are kept indefinitely as a history of ingestion
+  runs.
+- **No `control_` prefix**: see the note at the top of this section.
+
+### Pending decisions
+
+- Whether a maximum row count or retention/cleanup policy is needed
+  once the job history grows — not a concern at the current expected
+  volume.
+
 ## Table `control_users`
 
 Access accounts for the control panel, with the `control_` prefix

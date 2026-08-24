@@ -138,7 +138,13 @@ connection, no ORM). Run with: `python -m ingest.stations`.
   unattended process), it's rerun by hand if needed.
 - **Change history — decided: yes.** See "Load strategy" and the
   `stations_history` table in `spec/db/tables.md`.
-- **Periodic scheduling (cron/scheduler) — postponed.** Will be
-  tackled at the end of the project, once the rest of the ingestion
-  jobs and the control panel are implemented, when there's a full
+- **On-demand triggering from the control panel:** this job can be
+  queued from the "Stations" screen of the panel's Jobs module (see
+  `spec/control/module/jobs.md`), executed by the job worker described
+  in `spec/ingest/general.md`, in addition to running it directly with
+  `python -m ingest.stations`.
+- **Periodic scheduling (cron/scheduler) — postponed, and not the same
+  thing as the above.** The Jobs module only lets a user queue a run
+  whenever they choose to; there's still no automatic periodic
+  trigger. If that's ever needed, it'll be tackled once there's a full
   picture of what needs to run periodically.

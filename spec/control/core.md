@@ -43,13 +43,13 @@ command line or access the database directly.
   scripts or `db/`'s schema management, which remain independent (see
   `spec/db/general.md`).
 - **Scope:** for now the core (modular architecture, layers,
-  authentication, stack, deployment) and three modules are specified —
+  authentication, stack, deployment) and four modules are specified —
   `security` (login and user management), `stations` (listing and
-  map, the reference module) and `config` (editing operational
-  key-value settings used across the project's processes). The rest of
-  the panel's functionality (e.g. launching imports, viewing
-  climatological value history) will be added as new, independent
-  modules.
+  map, the reference module), `config` (editing operational
+  key-value settings used across the project's processes) and `jobs`
+  (queuing ingestion runs, panel label "Planificador"). The rest of
+  the panel's functionality (e.g. viewing climatological value
+  history) will be added as new, independent modules.
 
 ## Modular architecture
 
@@ -64,6 +64,7 @@ spec/control/
     ├── security.md      # Login, user management (see Security section)
     ├── stations.md      # Station listing + map (first functional module)
     ├── config.md         # Edit operational key-value settings
+    ├── jobs.md            # Queue ingestion runs ("Planificador" in the UI)
     └── ...
 ```
 
