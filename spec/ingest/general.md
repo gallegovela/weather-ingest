@@ -53,9 +53,11 @@ design).
 ## Job dispatch
 
 - The worker maps each `ingest_jobs.job_type` to the ingestion function
-  that handles it (e.g. `stations` → `ingest.stations`'s import logic,
-  `daily_values` → the future `ingest.daily_values`'s import logic),
-  passing the job's `params` as arguments. Adding a new ingestion
+  that handles it (e.g. `stations` → `ingest.stations.run_import`,
+  `daily_values` → the future `ingest.daily_values.run_import`), a
+  function that takes the job's `params` (a `dict`, `{}` for `stations`
+  since it takes none) and returns a result the worker turns into
+  `rows_inserted`/`rows_updated` on the `ingest_jobs` row. Adding a new ingestion
   script means adding a new entry to this mapping — no schema change,
   since `params` is already a flexible `jsonb` column (see
   `spec/db/tables.md`).

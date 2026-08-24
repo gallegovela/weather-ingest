@@ -147,6 +147,17 @@ following the pattern set by the `stations` module (see
 - Plain SQL with named parameters (psycopg's `%(key)s`), no query
   builders.
 
+## Implementation order
+
+When building a new piece of functionality that spans several parts
+of the project (e.g. a new ingestion job with its own control panel
+module), the fixed order is always: **`db/` → `ingest/` →
+`control/backend/` → `control/frontend/`**. Schema first (the tables
+the feature needs), then the ingestion/business logic that reads and
+writes them, then the API that exposes that logic, then the UI that
+consumes the API — never the other way around, so each layer only
+ever gets built against a lower layer that already exists.
+
 ## Notes on the external API
 
 - **AEMET OpenData**, authenticated via the `api_key` header, value

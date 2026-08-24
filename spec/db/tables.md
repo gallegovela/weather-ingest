@@ -211,7 +211,8 @@ Natural key: `key`.
 | Column        | Type        | Null | Description                                                        |
 |---------------|-------------|------|----------------------------------------------------------------------|
 | `key`         | `varchar`   | No   | Config key (primary key), `UPPER_SNAKE_CASE`. E.g. `POLL_INTERVAL_SECONDS`. |
-| `value`       | `varchar`   | No   | Config value, stored as raw text; each consumer parses it to the type it expects (integer, boolean, etc.). |
+| `value`       | `varchar`   | No   | Config value, stored as raw text; each consumer parses it to the type it expects. |
+| `value_type`  | `varchar`   | No   | One of `string`, `positive_integer` (see "Design notes") — governs how the panel validates an edit to `value`. |
 | `description` | `varchar`   | No   | Human-readable explanation of what the key controls, shown in the panel. |
 | `updated_at`  | `timestamp` | No   | Date/time of the last edit.                                          |
 
@@ -226,8 +227,22 @@ Natural key: `key`.
   this migration ran", so it's left out.
 - **`value` always `varchar`**: keeping the column type generic avoids
   a schema change every time a new config key with a different
-  underlying type is added; type conversion/validation is the
-  responsibility of whichever code reads a given key.
+  underlying type is added; type conversion is the responsibility of
+  whichever code reads a given key.
+- **`value_type` drives per-key validation on edit — decided:**
+  resolves the earlier open question of whether/how to validate a
+  key's new value before saving it (see `spec/control/module/config.md`).
+  Covers the types actually in use today:
+  - **`string`**: non-empty after trimming. Used by `AEMET_API_KEY`.
+  - **`positive_integer`**: parses as an integer, and is `> 0`. Used by
+    `POLL_INTERVAL_SECONDS` and `SCHEDULER_MAX_DATE_RANGE`.
+  Like `job_type`/`status` on `ingest_jobs`, `value_type` isn't
+  DB-enforced (no `CHECK`): the service layer looks up the validator
+  for a row's `value_type` and rejects an unrecognized one the same
+  way it'd reject a bad value, so there's no gap in practice. New
+  types are added here, and their validator implemented in the config
+  module's service layer, as new kinds of keys need them — same
+  incremental approach as seeding keys themselves (see "Seed data").
 - **Keys are code-defined, not free-form**: the set of valid keys is
   implicitly defined by whichever part of the codebase reads them (e.g.
   the ingest worker reading `POLL_INTERVAL_SECONDS`). The panel doesn't
@@ -248,31 +263,34 @@ Natural key: `key`.
   part of the codebase starts needing it (same pattern as the
   `control_users` admin seed in `spec/db/tables.md`), rather than all
   being seeded up front.
-- **`AEMET_API_KEY`** — the first key seeded (migrations
-  `create_config_values` and `seed_config_value_aemet_api_key`):
-  AEMET OpenData's `api_key`, previously an `AEMET_API_KEY` variable in
-  `.env`, now read here by `ingest/` (see `ingest/db.py`'s
-  `get_config_value`, used by `ingest/aemet_client.py`) instead. Unlike
-  other keys, this one is a **secret**, so the migration seeds a
-  placeholder value (`CHANGE_ME`), not the real key — the real value is
-  set with a direct `UPDATE` against the running database, never
-  committed. `.env`'s `AEMET_API_KEY` isn't read by any code anymore,
-  but hasn't been removed from `.env` yet.
-- **`POLL_INTERVAL_SECONDS`** — `300` (5 minutes). Seconds the job
-  worker sleeps between poll iterations when there's nothing pending
-  (see `spec/ingest/general.md`).
-- **`SCHEDULER_MAX_DATE_RANGE`** — `180` (days). Maximum date range a
-  single `daily_values` job may cover — both the threshold the Jobs
-  module enforces when queuing one (see
-  `spec/control/module/jobs.md`) and the window the ingestion script
-  itself uses against the AEMET endpoint (see
+- **`AEMET_API_KEY`** (`value_type: string`) — the first key seeded
+  (migrations `create_config_values` and
+  `seed_config_value_aemet_api_key`): AEMET OpenData's `api_key`,
+  previously an `AEMET_API_KEY` variable in `.env`, now read here by
+  `ingest/` (see `ingest/db.py`'s `get_config_value`, used by
+  `ingest/aemet_client.py`) instead. Unlike other keys, this one is a
+  **secret**, so the migration seeds a placeholder value (`CHANGE_ME`),
+  not the real key — the real value is set with a direct `UPDATE`
+  against the running database, never committed. `.env`'s
+  `AEMET_API_KEY` isn't read by any code anymore, but hasn't been
+  removed from `.env` yet.
+- **`POLL_INTERVAL_SECONDS`** (`value_type: positive_integer`) — `300`
+  (5 minutes). Seconds the job worker sleeps between poll iterations
+  when there's nothing pending (see `spec/ingest/general.md`).
+- **`SCHEDULER_MAX_DATE_RANGE`** (`value_type: positive_integer`) —
+  `180` (days). Maximum date range a single `daily_values` job may
+  cover — both the threshold the Jobs module enforces when queuing one
+  (see `spec/control/module/jobs.md`) and the window the ingestion
+  script itself uses against the AEMET endpoint (see
   `spec/ingest/DAILY_VALUES.md`), the same number reused for both.
+- `value_type` was added to the table (and backfilled for these three
+  keys) by a later migration, `add_value_type_to_config_values` — the
+  table was created without it initially, before per-key validation
+  was decided.
 
 ### Pending decisions
 
-- Per-key value validation (e.g. `POLL_INTERVAL_SECONDS` must be a
-  positive integer) — to be decided as each key is added, documented
-  in the spec of whichever module/process introduces it.
+None.
 
 ## Table `ingest_jobs`
 
@@ -293,7 +311,7 @@ No natural key: each row is a job execution request, not an entity.
 | `id`            | `bigint`    | No   | Auto-numbered technical identifier (primary key).                            |
 | `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`).      |
 | `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`). |
-| `status`        | `varchar`   | No   | One of `pending`, `running`, `success`, `error`. Defaults to `pending`.        |
+| `status`        | `varchar`   | No   | One of `pending`, `running`, `success`, `error`, `cancelled`. Defaults to `pending`. |
 | `created_at`    | `timestamp` | No   | Date/time the job was queued.                                                 |
 | `started_at`    | `timestamp` | Yes  | Date/time the worker claimed the job.                                         |
 | `finished_at`   | `timestamp` | Yes  | Date/time the job finished (success or error).                                |
@@ -325,18 +343,41 @@ No natural key: each row is a job execution request, not an entity.
   transaction. This keeps things correct even if more than one worker
   process is ever run, though today there's only one (see
   `spec/ingest/general.md`).
-- **No edit, no delete**: a job represents a specific request; there's
-  no screen to change its parameters after creation (queue a new job
-  instead — see `spec/control/module/jobs.md`) or to remove it from
-  the table. Rows are kept indefinitely as a history of ingestion
-  runs.
+- **No edit, but cancellable while `pending`**: a job's `params` can
+  never be changed after creation (queue a new job instead). The one
+  state change a user can trigger directly (as opposed to the worker)
+  is cancelling a `pending` job (see `spec/control/module/jobs.md`);
+  once a job is `running` it can no longer be cancelled, it runs to
+  completion (`success`/`error`).
+- **Deletable from the panel, any status — decided:** unlike cancelling
+  (`pending` only), deleting a row has no status restriction — see
+  "Pending decisions" below and `spec/control/module/jobs.md`,
+  "Deleting jobs". Deleting a `running` job's row doesn't stop the
+  worker (it isn't notified); the worker's later `UPDATE` when it
+  finishes that job just affects zero rows, silently. This is an
+  accepted, low-consequence edge case (the ingestion side effects
+  already happened or are already in progress regardless of the
+  `ingest_jobs` row) rather than something worth adding a status guard
+  for.
+- **Cancelling is a conditional update, not a check-then-update**:
+  `UPDATE ingest_jobs SET status = 'cancelled' WHERE id = %(id)s AND
+  status = 'pending'`, checking whether a row was actually affected.
+  This avoids a race against the worker's own claim (`SELECT ... FOR
+  UPDATE SKIP LOCKED` immediately followed by setting `running` in the
+  same transaction, see above): if the worker claimed the job first,
+  this `UPDATE` simply matches zero rows (the status is no longer
+  `pending` by the time it runs) instead of cancelling a job that's
+  already executing.
 - **No `control_` prefix**: see the note at the top of this section.
 
 ### Pending decisions
 
-- Whether a maximum row count or retention/cleanup policy is needed
-  once the job history grows — not a concern at the current expected
-  volume.
+None. **Retention — decided: no automatic policy.** Instead of a
+background cleanup job or row cap, the Jobs module's history list
+lets a user delete rows directly — single or multiple at once, see
+`spec/control/module/jobs.md`, "Deleting jobs". Manual and on-demand,
+same spirit as the jobs themselves (`spec/control/module/jobs.md`,
+"Objective": nothing in this module runs on a schedule).
 
 ## Table `control_users`
 

@@ -52,6 +52,11 @@ subitem/screen here.
   timestamps, row counts), most recent first, following the shared
   "Paginated listings with filters" convention (`core.md`): filterable
   by `status` and by `created_at` range.
+- Each row whose `status` is `pending` has a **Cancel** action (see
+  "Cancelling a job" below); rows in any other status don't.
+- Each row has a selection checkbox, plus a **Delete selected** action
+  (see "Deleting jobs" below) enabled whenever at least one row is
+  selected.
 
 ### 2. Daily values
 
@@ -93,7 +98,45 @@ subitem/screen here.
   - **Redefine the range**: closes the warning without queuing
     anything, so the user can edit the dates.
 - Same **history list** pattern as the Stations screen, filtered to
-  `job_type = 'daily_values'`, plus a filter by `station_code`.
+  `job_type = 'daily_values'`, plus a filter by `station_code`, the
+  same per-row **Cancel** action on `pending` jobs (see "Cancelling a
+  job" below), and the same selection + **Delete selected** action
+  (see "Deleting jobs" below).
+
+## Cancelling a job
+
+- **Decided: a `pending` job can be cancelled; a `running` one can't.**
+  Once the worker has claimed a job there's no way to interrupt it
+  mid-run (see `spec/ingest/general.md`) — cancelling only ever
+  prevents a job that hasn't started yet from starting.
+- Implemented as a conditional update (`spec/db/tables.md`,
+  `ingest_jobs` design notes) so there's no race against the worker
+  claiming the same job at the same time: if the job is no longer
+  `pending` by the time the cancel request runs, it fails with `400`
+  instead of cancelling a job that's already executing.
+- No confirmation dialog needed (unlike deleting a security user):
+  cancelling a queued-but-not-started job isn't destructive to any
+  data already written.
+
+## Deleting jobs
+
+- **Decided: no automatic retention policy — manual deletion from the
+  history list instead** (see `spec/db/tables.md`, `ingest_jobs`,
+  "Pending decisions"). Every row has a selection checkbox; a
+  **Delete selected** button above the list removes every checked row.
+- **One action for one or many — decided:** there's no separate
+  "delete this row" vs. "delete these rows" — selecting a single row
+  and using the same **Delete selected** action covers the single-row
+  case too, instead of duplicating the action per row.
+- **No status restriction — decided:** any row can be deleted
+  regardless of `status`, including `pending` or `running` ones (see
+  `spec/db/tables.md` for what that means for a `running` job). Unlike
+  cancelling, this isn't about stopping a job — it's cleaning up
+  history.
+- **Confirmation dialog required** (same pattern as deleting a
+  security user, `spec/control/module/security.md`): deleting is
+  irreversible, so the panel confirms before calling the delete
+  endpoint, stating how many jobs will be removed.
 
 ## Data
 
@@ -101,10 +144,17 @@ Follows the layered architecture in `core.md`:
 
 - **DAO** (`control/backend/modules/jobs/dao.py`): plain SQL against
   `ingest_jobs` (`spec/db/tables.md`) — insert a new job, list jobs
-  filtered by `job_type` with pagination/filters.
+  filtered by `job_type` with pagination/filters, the conditional
+  `UPDATE ... WHERE status = 'pending'` used to cancel one, and
+  `DELETE ... WHERE id = ANY(%(ids)s) AND job_type = %(job_type)s` for
+  bulk delete (the `job_type` filter keeps the Stations screen from
+  ever deleting a Daily values row or vice versa, even though both
+  live in the same table).
 - **Service** (`service.py`): validates `params` per `job_type` before
-  inserting (e.g. `daily_values`'s date range as above); no other
-  business logic.
+  inserting (e.g. `daily_values`'s date range and
+  `SCHEDULER_MAX_DATE_RANGE` as above); on cancel, raises `400` if the
+  DAO's conditional update affected zero rows; delete has no
+  validation beyond the `ids` list being non-empty.
 - **Control** (`router.py`): exposes the endpoints.
 
 ### Endpoints (REST API)
@@ -119,13 +169,29 @@ internally.
 - `POST /api/jobs/stations` — queue a stations import job (no body).
 - `GET /api/jobs/stations` — paginated history of stations jobs,
   filterable by `status` and `created_at` range.
+- `POST /api/jobs/stations/{id}/cancel` — cancel a `pending` stations
+  job (see "Cancelling a job" above). `400` if it's not `pending`
+  anymore.
 - `POST /api/jobs/daily-values` — queue a daily values import job.
   Body: `{"station_code", "date_from", "date_to"}`.
 - `GET /api/jobs/daily-values` — paginated history of daily values
   jobs, filterable by `status`, `created_at` range and `station_code`.
-
-## Pending decisions
-
-- Whether/how to let a user cancel a `pending` job before the worker
-  picks it up — not needed for a first version; revisit if the queue
-  grows large enough for it to matter.
+- `POST /api/jobs/daily-values/{id}/cancel` — cancel a `pending` daily
+  values job. Same `400` behavior as above.
+- **`POST .../cancel`, not `DELETE`** — decided: the row isn't removed
+  (a cancelled job is kept as history, `spec/db/tables.md`), only its
+  `status` changes, so this is an action/state-transition endpoint
+  rather than the "delete a resource" semantics `DELETE` implies in
+  this project's REST contract (`core.md`).
+- `DELETE /api/jobs/stations` — body `{"ids": [1, 2, 3]}`, deletes the
+  given stations jobs. Works the same for a single id (`{"ids": [1]}`)
+  — see "Deleting jobs" above, "one action for one or many".
+- `DELETE /api/jobs/daily-values` — same, for daily values jobs.
+- **`DELETE` with a body, scoped per job type** — decided: this one
+  *is* a real deletion, so `DELETE` is the right verb (contrast with
+  `.../cancel` above); a body carrying a list of ids is used instead
+  of one call per id, matching "one action for one or many" in
+  "Deleting jobs". Scoping each endpoint to its own job type (rather
+  than one shared `DELETE /api/jobs`) follows the same "one
+  create/list/cancel pair per job type" reasoning already used for the
+  rest of this module's endpoints.

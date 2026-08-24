@@ -9,6 +9,7 @@ Usage:
 """
 
 import logging
+from dataclasses import dataclass
 
 from ingest import aemet_client, db
 
@@ -74,6 +75,14 @@ _CURRENT_COLUMNS = (
 log = logging.getLogger("ingest.stations")
 
 
+@dataclass
+class ImportResult:
+    received: int
+    inserted: int
+    updated: int
+    errors: int
+
+
 def parse_coordinate(raw: str) -> float:
     """Converts an AEMET coordinate (degrees/minutes/seconds +
     hemisphere, e.g. '394924N' or '025309E') to decimal degrees."""
@@ -107,8 +116,11 @@ def transform(record: dict) -> dict:
     }
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+def run_import(params: dict | None = None) -> ImportResult:
+    """Runs the import and returns its result. `params` is accepted but
+    unused (this job takes none) so the job worker can dispatch to it
+    the same way it dispatches to any other job type's run_import (see
+    spec/ingest/general.md, "Job dispatch")."""
 
     raw_records = aemet_client.fetch(ENDPOINT)
     log.info("Received %d stations from AEMET", len(raw_records))
@@ -151,6 +163,12 @@ def main() -> None:
         updated,
         errors,
     )
+    return ImportResult(received=len(raw_records), inserted=inserted, updated=updated, errors=errors)
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    run_import()
 
 
 if __name__ == "__main__":

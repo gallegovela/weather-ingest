@@ -130,7 +130,10 @@ Notes:
 
 Script in `ingest/stations.py`, backed by `ingest/aemet_client.py`
 (two-step pattern + decoding) and `ingest/db.py` (`psycopg` v3
-connection, no ORM). Run with: `python -m ingest.stations`.
+connection, no ORM). The actual import logic lives in `run_import()`,
+called either by `main()` (CLI: `python -m ingest.stations`) or by the
+job worker (`spec/ingest/general.md`, "Job dispatch") — same function
+either way, so both paths report the same result.
 
 ## Additional decisions
 

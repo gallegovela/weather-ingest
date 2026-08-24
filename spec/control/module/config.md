@@ -40,8 +40,10 @@ Follows the layered architecture in `core.md`:
 - **DAO** (`control/backend/modules/config/dao.py`): plain SQL
   (`psycopg` v3, no ORM) against `config_values`.
 - **Service** (`service.py`): validates that the key being edited
-  exists (404 otherwise); no per-key value format validation yet (see
-  "Pending decisions").
+  exists (`404` otherwise), then validates the new value against that
+  row's `value_type` (see `spec/db/tables.md`, table `config_values`:
+  `string` = non-empty, `positive_integer` = parses as an int `> 0`),
+  rejecting with `400` if it doesn't match.
 - **Control** (`router.py`): exposes the endpoints.
 
 ### Endpoints (REST API)
@@ -55,9 +57,4 @@ above (no pagination):
 
 ## Pending decisions
 
-- **Per-key value validation**: whether/how to validate that a given
-  key's new value has the right shape (e.g.
-  `POLL_INTERVAL_SECONDS` must be a positive integer) before saving
-  it. To be decided when each key is introduced, documented in the
-  spec of whichever module/process needs it (see
-  `spec/db/tables.md`, table `config_values`).
+None.
