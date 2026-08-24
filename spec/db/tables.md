@@ -240,8 +240,19 @@ Natural key: `key`.
 - Each config key is inserted by its own migration at the point some
   part of the codebase starts needing it (same pattern as the
   `control_users` admin seed in `spec/db/tables.md`), rather than all
-  being seeded up front. The first key, `poll_interval_seconds`, will
-  be seeded when the ingest job worker is implemented.
+  being seeded up front.
+- **`AEMET_API_KEY`** — the first key seeded (migrations
+  `create_config_values` and `seed_config_value_aemet_api_key`):
+  AEMET OpenData's `api_key`, previously an `AEMET_API_KEY` variable in
+  `.env`, now read here by `ingest/` (see `ingest/db.py`'s
+  `get_config_value`, used by `ingest/aemet_client.py`) instead. Unlike
+  other keys, this one is a **secret**, so the migration seeds a
+  placeholder value (`CHANGE_ME`), not the real key — the real value is
+  set with a direct `UPDATE` against the running database, never
+  committed. `.env`'s `AEMET_API_KEY` isn't read by any code anymore,
+  but hasn't been removed from `.env` yet.
+- **`poll_interval_seconds`** — will be seeded when the ingest job
+  worker is implemented (see `spec/ingest/general.md`).
 
 ### Pending decisions
 

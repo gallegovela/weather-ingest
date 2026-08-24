@@ -44,7 +44,7 @@ db/                  # Self-contained database build module (Alembic).
                      # See spec/db/general.md.
 ingest/              # Ingestion scripts (one per source resource).
 ├── requirements.txt # Dependencies specific to the ingest module.
-├── config.py        # .env loading (AEMET_API_KEY, DATABASE_URL).
+├── config.py        # .env loading (DATABASE_URL; AEMET_API_KEY lives in config_values, see spec/db/tables.md).
 ├── aemet_client.py  # Generic client for AEMET's two-step pattern.
 ├── db.py            # psycopg connection (plain SQL, no ORM).
 └── stations.py       # Job: station inventory (spec/ingest/STATIONS.md).
@@ -85,13 +85,17 @@ following the pattern set by the `stations` module (see
   uses `npm` with its own `node_modules/` (not versioned).
 - **Environment variables** (`.env` file at the project root, not
   versioned, shared by `db/`, `ingest/` and `control/backend/`):
-  - `AEMET_API_KEY` — AEMET OpenData API key.
   - `DATABASE_URL` — PostgreSQL connection string, SQLAlchemy format
     with the `psycopg` v3 driver explicit:
     `postgresql+psycopg://user:password@host:5432/db`.
   - `CONTROL_SESSION_TTL_MINUTES` — minutes a control panel session
     stays valid from login, without renewal (defaults to `15` if not
     set — see `spec/control/core.md`).
+  - `AEMET_API_KEY` is **not** read from here: it lives in the
+    `config_values` database table (see `spec/db/tables.md`), read by
+    `ingest/` at runtime. Not yet removed from `.env` (kept during the
+    migration to `config_values`), but no code reads it from there
+    anymore.
 - **Local database:** `docker-compose.yml` starts a development
   PostgreSQL with the credentials already in `.env`
   (`weather`/`weather`/`weather`). Start it with `docker compose up -d`.
@@ -145,8 +149,9 @@ following the pattern set by the `stations` module (see
 
 ## Notes on the external API
 
-- **AEMET OpenData**, authenticated via the `api_key` header
-  (`AEMET_API_KEY`).
+- **AEMET OpenData**, authenticated via the `api_key` header, value
+  read from the `config_values` table's `AEMET_API_KEY` key (see
+  `spec/db/tables.md`), not from `.env`.
 - Two-step pattern (initial request → temporary `datos` URL → actual
   content) and `ISO-8859-15` encoding in the data response: see
   `spec/ingest/STATIONS.md` for the detail, encapsulated in

@@ -9,13 +9,25 @@ import json
 
 import requests
 
-from ingest.config import AEMET_API_KEY
+from ingest import db
 
 TIMEOUT = 30
+
+_api_key_cache: str | None = None
 
 
 class AemetError(RuntimeError):
     pass
+
+
+def _api_key() -> str:
+    # Cached for the lifetime of the process: fetched from config_values
+    # (see spec/db/tables.md) instead of .env, but re-reading it from the
+    # database on every single AEMET request would be wasteful.
+    global _api_key_cache
+    if _api_key_cache is None:
+        _api_key_cache = db.get_config_value("AEMET_API_KEY")
+    return _api_key_cache
 
 
 def fetch(endpoint: str) -> list | dict:
@@ -23,7 +35,7 @@ def fetch(endpoint: str) -> list | dict:
     decoded JSON (ISO-8859-15 -> str -> json)."""
 
     response = requests.get(
-        endpoint, headers={"api_key": AEMET_API_KEY}, timeout=TIMEOUT
+        endpoint, headers={"api_key": _api_key()}, timeout=TIMEOUT
     )
     response.raise_for_status()
     envelope = response.json()

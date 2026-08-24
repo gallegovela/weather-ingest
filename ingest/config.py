@@ -2,6 +2,9 @@
 
 Reads the project root's .env (same file db/ uses, see
 spec/db/general.md), independent of the rest of the app.
+
+AEMET_API_KEY is *not* read here: it lives in the config_values table
+(see spec/db/tables.md and ingest/db.py's get_config_value), not .env.
 """
 
 import os
@@ -22,5 +25,4 @@ def _require_env(name: str) -> str:
     return value
 
 
-AEMET_API_KEY = _require_env("AEMET_API_KEY")
 DATABASE_URL = _require_env("DATABASE_URL")

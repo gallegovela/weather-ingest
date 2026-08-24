@@ -17,3 +17,15 @@ def _psycopg_dsn(database_url: str) -> str:
 
 def connect() -> psycopg.Connection:
     return psycopg.connect(_psycopg_dsn(DATABASE_URL))
+
+
+def get_config_value(key: str) -> str:
+    """Reads a single value from config_values (see spec/db/tables.md)."""
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT value FROM config_values WHERE key = %(key)s", {"key": key})
+        row = cur.fetchone()
+
+    if row is None:
+        raise RuntimeError(f"Config key {key!r} not found in config_values.")
+    return row[0]

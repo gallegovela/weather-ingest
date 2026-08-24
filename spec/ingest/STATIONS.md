@@ -14,7 +14,8 @@ stations without depending on another API call.
 - **Endpoint:**
   `GET https://opendata.aemet.es/opendata/api/valores/climatologicos/inventarioestaciones/todasestaciones`
 - **Authentication:** `api_key` header, value taken from the
-  `AEMET_API_KEY` environment variable (`.env` file, not versioned).
+  `AEMET_API_KEY` key in the `config_values` table (see
+  `spec/db/tables.md`), not from `.env`.
 - **Frequency:** on demand for now. The station inventory changes very
   infrequently (occasional additions/removals/location changes), so
   it doesn't need to run daily. It can be scheduled later (e.g.
@@ -115,7 +116,7 @@ Notes:
 
 ## Script flow (summary)
 
-1. Read `AEMET_API_KEY` from `.env`.
+1. Read `AEMET_API_KEY` from `config_values`.
 2. Call the station inventory endpoint.
 3. Validate the response (`estado == 200` and presence of `datos`).
 4. Download the content from the `datos` URL.

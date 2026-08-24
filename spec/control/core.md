@@ -265,8 +265,9 @@ layer validates the token against `control_sessions`.
   minutes after login, the session stops being valid and the user is
   sent back to the login screen. The value isn't hardcoded: it's read
   from a new `.env` environment variable (`CONTROL_SESSION_TTL_MINUTES`,
-  default value `15`), alongside the rest of the project's
-  configuration (`AEMET_API_KEY`, `DATABASE_URL`).
+  default value `15`), alongside the rest of the project's `.env`
+  configuration (`DATABASE_URL`; unlike `AEMET_API_KEY`, which lives in
+  the `config_values` table, see `spec/db/tables.md`).
 - **No renewal — decided:** the session is **not renewed** with use;
   the 15 minutes are always counted from login, not from the last
   activity. On expiry, the user simply logs back in; there's no task

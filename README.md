@@ -41,9 +41,9 @@ Requirements: Python 3, Node.js (or Docker, see below), Docker
 Compose, and an [AEMET OpenData API
 key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
 
-1. Create a `.env` file at the project root with your AEMET API key
-   and database connection string (see `CLAUDE.md` for the full list
-   of expected variables: `AEMET_API_KEY`, `DATABASE_URL`, etc.).
+1. Create a `.env` file at the project root with your database
+   connection string (see `CLAUDE.md` for the full list of expected
+   variables: `DATABASE_URL`, etc.).
 2. Start the local database:
    ```
    docker compose up -d
@@ -54,11 +54,20 @@ key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
    pip install -r db/requirements.txt -r ingest/requirements.txt
    python db/migrate.py upgrade
    ```
-4. Run an ingestion job, e.g. the station inventory:
+4. Set your [AEMET OpenData API
+   key](https://opendata.aemet.es/centrodedescargas/altaUsuario): it's
+   read from the `config_values` database table, not `.env` (see
+   `spec/db/tables.md`). The migrations above seed a placeholder row;
+   replace it with your real key:
+   ```
+   docker compose exec postgres psql -U weather -d weather -c \
+     "UPDATE config_values SET value = 'your-real-key' WHERE key = 'AEMET_API_KEY'"
+   ```
+5. Run an ingestion job, e.g. the station inventory:
    ```
    python -m ingest.stations
    ```
-5. (Optional) Run the control panel:
+6. (Optional) Run the control panel:
    ```
    cd control/backend && python -m venv .venv && source .venv/bin/activate \
      && pip install -r requirements.txt && uvicorn main:app --reload

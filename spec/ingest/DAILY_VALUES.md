@@ -20,7 +20,8 @@ everything" mode, the user picks what to import each time.
 - **Endpoint:**
   `GET https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos/fechaini/{fechaIniStr}/fechafin/{fechaFinStr}/estacion/{idema}`
 - **Authentication:** `api_key` header, same as the rest of `ingest/`
-  (`AEMET_API_KEY`).
+  — value taken from the `AEMET_API_KEY` key in `config_values` (see
+  `spec/db/tables.md`), not `.env`.
 - **Path parameters** (not query string):
   - `fechaIniStr` / `fechaFinStr`: `AAAA-MM-DDTHH:MM:SSUTC`, e.g.
     `2024-01-01T00:00:00UTC`.
