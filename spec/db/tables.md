@@ -1,196 +1,192 @@
-# Tablas de la base de datos
+# Database tables
 
-Este documento recoge el diseño de las tablas del proyecto. Se irá
-ampliando a medida que se añadan nuevos elementos (valores
-climatológicos diarios, etc.).
+This document covers the design of the project's tables. It will be
+expanded as new elements are added (daily climatological values,
+etc.).
 
-Motor de base de datos: PostgreSQL (ver `spec/db/general.md`).
+Database engine: PostgreSQL (see `spec/db/general.md`).
 
-## Tabla `estaciones`
+## Table `stations`
 
-Almacena el inventario de estaciones climatológicas de AEMET,
-alimentada por el proceso de importación descrito en
-[`spec/importa/ESTACIONES.md`](../importa/ESTACIONES.md).
+Stores the inventory of AEMET climatological stations, fed by the
+ingestion process described in
+[`spec/ingest/STATIONS.md`](../ingest/STATIONS.md).
 
-Clave natural: `indicativo` (código de estación asignado por AEMET).
+Natural key: `station_code` (station code assigned by AEMET).
 
-| Columna              | Tipo           | Nulo | Descripción                                                                 |
+| Column               | Type           | Null | Description                                                                 |
 |----------------------|----------------|------|------------------------------------------------------------------------------|
-| `indicativo`         | `varchar`      | No   | Indicativo climatológico de la estación (clave primaria). Ej. `B013X`.       |
-| `nombre`             | `varchar`      | No   | Nombre/ubicación de la estación. Ej. `ESCORCA, LLUC`.                         |
-| `provincia`          | `varchar`      | No   | Provincia donde reside la estación.                                          |
-| `latitud`            | `varchar`      | No   | Latitud original tal como la envía AEMET, formato `GGMMSSH`. Ej. `394924N`.  |
-| `longitud`           | `varchar`      | No   | Longitud original tal como la envía AEMET, formato `GGGMMSSH`. Ej. `025309E`.|
-| `latitud_decimal`    | `decimal`      | No   | Latitud convertida a grados decimales (derivada de `latitud`).              |
-| `longitud_decimal`   | `decimal`      | No   | Longitud convertida a grados decimales (derivada de `longitud`).            |
-| `altitud`            | `integer`      | No   | Altitud de la estación en metros.                                           |
-| `indsinop`           | `varchar`      | Sí   | Indicativo sinóptico de la estación (no todas lo tienen).                    |
-| `fecha_alta`         | `timestamp`    | No   | Fecha/hora en que la estación se vio por primera vez en el inventario.       |
-| `fecha_actualizacion`| `timestamp`    | No   | Fecha/hora de la última vez que se actualizaron sus datos.                   |
+| `station_code`       | `varchar`      | No   | Climatological code of the station (primary key). E.g. `B013X`.       |
+| `name`               | `varchar`      | No   | Station name/location. E.g. `ESCORCA, LLUC`.                         |
+| `province`           | `varchar`      | No   | Province where the station is located.                                          |
+| `latitude`           | `varchar`      | No   | Original latitude as sent by AEMET, `DDMMSSH` format. E.g. `394924N`.  |
+| `longitude`          | `varchar`      | No   | Original longitude as sent by AEMET, `DDDMMSSH` format. E.g. `025309E`.|
+| `latitude_decimal`   | `decimal`      | No   | Latitude converted to decimal degrees (derived from `latitude`).              |
+| `longitude_decimal`  | `decimal`      | No   | Longitude converted to decimal degrees (derived from `longitude`).            |
+| `altitude`           | `integer`      | No   | Station altitude in meters.                                           |
+| `synoptic_code`      | `varchar`      | Yes  | Synoptic code of the station (not all stations have one).                    |
+| `created_at`         | `timestamp`    | No   | Date/time the station was first seen in the inventory.       |
+| `updated_at`         | `timestamp`    | No   | Date/time its data was last updated.                   |
 
-### Notas de diseño
+### Design notes
 
-- **Clave primaria**: `indicativo`. Es el identificador estable que
-  usa AEMET para referenciar la estación en el resto de endpoints
-  (por ejemplo, al pedir valores climatológicos diarios de una
-  estación concreta), por lo que otras tablas futuras referenciarán
-  esta columna como clave foránea.
-- **Coordenadas duplicadas (texto + decimal)**: se conserva el valor
-  original de AEMET (`latitud`/`longitud` en formato `GGMMSSH`) por
-  trazabilidad y depuración, además de la versión ya convertida a
-  grados decimales (`latitud_decimal`/`longitud_decimal`), que es la
-  que se usará en cálculos, mapas y filtros geográficos.
-- **`indsinop` opcional**: se normaliza el valor vacío (`""`) que
-  devuelve la API como `NULL`.
-- **Sin borrado físico**: el proceso de importación no elimina filas
-  cuando una estación deja de aparecer en el inventario de AEMET; solo
-  inserta o actualiza (upsert). Si en el futuro se necesita marcar
-  estaciones como inactivas, se añadirá una columna de estado
-  (ej. `activa boolean`) en vez de borrar el registro.
-- **Auditoría**: `fecha_alta` se fija una única vez, en la primera
-  inserción; `fecha_actualizacion` se refresca en cada upsert,
-  aunque los datos no hayan cambiado, para saber cuándo fue la
-  última sincronización con la API.
+- **Primary key**: `station_code`. It's the stable identifier AEMET
+  uses to reference the station in the rest of its endpoints (e.g.
+  when requesting daily climatological values for a specific
+  station), so future tables will reference this column as a foreign
+  key.
+- **Duplicated coordinates (text + decimal)**: the original AEMET
+  value is kept (`latitude`/`longitude` in `DDMMSSH` format) for
+  traceability and debugging, alongside the version already
+  converted to decimal degrees (`latitude_decimal`/`longitude_decimal`),
+  which is the one used in calculations, maps and geographic filters.
+- **`synoptic_code` optional**: the empty value (`""`) returned by the
+  API is normalized to `NULL`.
+- **No physical deletion**: the ingestion process doesn't remove rows
+  when a station stops appearing in the AEMET inventory; it only
+  inserts or updates (upsert). If marking stations as inactive is
+  ever needed, a status column will be added (e.g. `active boolean`)
+  instead of deleting the record.
+- **Auditing**: `created_at` is set once, on first insert;
+  `updated_at` is refreshed on every upsert, even if the data hasn't
+  changed, to know when the last sync with the API happened.
 
-### Implementación
+### Implementation
 
-Migración: `db/migrations/versions/20260822_2051_f54155bc39b7_create_estaciones.py`.
-`latitud_decimal`/`longitud_decimal` implementadas como `NUMERIC(9,6)`
-(precisión de ~0.11 m, más que suficiente para coordenadas de
-estaciones).
+Migration: `db/migrations/versions/20260822_2051_f54155bc39b7_create_stations.py`.
+`latitude_decimal`/`longitude_decimal` implemented as `NUMERIC(9,6)`
+(precision of ~0.11 m, more than enough for station coordinates).
 
-### Pendiente de definir
+### Pending decisions
 
-- Si se añade un identificador técnico autonumérico (`id`) además de
-  la clave natural `indicativo`, en función de cómo lo requieran las
-  tablas que referencien a `estaciones`.
-- Índices adicionales (ej. por `provincia` si se filtra a menudo por
-  esa columna).
+- Whether to add an auto-numbered technical identifier (`id`) besides
+  the `station_code` natural key, depending on how tables that
+  reference `stations` end up needing it.
+- Additional indexes (e.g. on `province` if it's filtered on often).
 
-## Tabla `estaciones_historico`
+## Table `stations_history`
 
-Guarda el estado anterior de una estación cada vez que
-`importa/estaciones.py` detecta, durante el upsert, que alguno de sus
-datos ha cambiado respecto a lo ya almacenado (ver
-[`spec/importa/ESTACIONES.md`](../importa/ESTACIONES.md)). No se
-espera que los datos de una estación cambien con frecuencia, pero si
-ocurre (cambio de ubicación, de altitud, etc.) queda constancia de
-cómo era antes del cambio.
+Keeps the previous state of a station every time
+`ingest/stations.py` detects, during the upsert, that some of its
+data has changed relative to what's already stored (see
+[`spec/ingest/STATIONS.md`](../ingest/STATIONS.md)). A station's data
+isn't expected to change often, but if it does (a location change, an
+altitude change, etc.) there's a record of how it was before the
+change.
 
-| Columna              | Tipo        | Nulo | Descripción                                                                 |
+| Column                | Type        | Null | Description                                                                 |
 |-----------------------|-------------|------|--------------------------------------------------------------------------------|
-| `id`                  | `bigint`    | No   | Identificador técnico autonumérico (clave primaria). No hay clave natural: cada fila es un evento de cambio, no una entidad. |
-| `estacion_indicativo` | `varchar`   | No   | Clave foránea a `estaciones.indicativo`: estación a la que pertenece este histórico. |
-| `nombre`              | `varchar`   | No   | Valor de `nombre` **antes** del cambio.                                       |
-| `provincia`           | `varchar`   | No   | Valor de `provincia` antes del cambio.                                        |
-| `latitud`             | `varchar`   | No   | Valor de `latitud` (formato `GGMMSSH`) antes del cambio.                      |
-| `longitud`            | `varchar`   | No   | Valor de `longitud` (formato `GGGMMSSH`) antes del cambio.                    |
-| `latitud_decimal`     | `decimal`   | No   | Valor de `latitud_decimal` antes del cambio.                                  |
-| `longitud_decimal`    | `decimal`   | No   | Valor de `longitud_decimal` antes del cambio.                                 |
-| `altitud`             | `integer`   | No   | Valor de `altitud` antes del cambio.                                          |
-| `indsinop`            | `varchar`   | Sí   | Valor de `indsinop` antes del cambio.                                         |
-| `fecha_cambio`        | `timestamp` | No   | Fecha/hora en la que se detectó el cambio (la `fecha_actualizacion` que tenía la fila en `estaciones` justo antes de sobreescribirla). |
+| `id`                   | `bigint`    | No   | Auto-numbered technical identifier (primary key). No natural key: each row is a change event, not an entity. |
+| `station_code`         | `varchar`   | No   | Foreign key to `stations.station_code`: the station this history entry belongs to. |
+| `name`                 | `varchar`   | No   | Value of `name` **before** the change.                                       |
+| `province`             | `varchar`   | No   | Value of `province` before the change.                                        |
+| `latitude`             | `varchar`   | No   | Value of `latitude` (`DDMMSSH` format) before the change.                      |
+| `longitude`            | `varchar`   | No   | Value of `longitude` (`DDDMMSSH` format) before the change.                    |
+| `latitude_decimal`     | `decimal`   | No   | Value of `latitude_decimal` before the change.                                  |
+| `longitude_decimal`    | `decimal`   | No   | Value of `longitude_decimal` before the change.                                 |
+| `altitude`             | `integer`   | No   | Value of `altitude` before the change.                                          |
+| `synoptic_code`        | `varchar`   | Yes  | Value of `synoptic_code` before the change.                                         |
+| `changed_at`           | `timestamp` | No   | Date/time the change was detected (the `updated_at` the row in `stations` had right before it was overwritten). |
 
-### Notas de diseño
+### Design notes
 
-- **Snapshot completo, no diff por campo**: cada fila representa el
-  estado íntegro de la estación justo antes de la actualización que lo
-  sustituyó, no solo el campo que cambió. Es más simple de generar
-  (una copia de la fila existente) y de consultar (el estado completo
-  en cualquier punto del histórico), a costa de guardar columnas que
-  no cambiaron junto a las que sí.
-- **Solo se registra en actualizaciones, no en altas**: una estación
-  nueva no tiene un "estado anterior" que guardar.
-- **Detección de cambio basada en los campos de origen**: se compara
-  únicamente `nombre`, `provincia`, `latitud`, `longitud`, `altitud`
-  e `indsinop` (los campos que vienen de la API). `latitud_decimal` y
-  `longitud_decimal` no se comparan aparte: son una función
-  determinista de `latitud`/`longitud`, así que si estas no han
-  cambiado, tampoco lo han hecho sus versiones decimales.
-- **Sin clave natural**: a diferencia de `estaciones`, cada fila es un
-  evento (una versión anterior), no una entidad con identidad propia,
-  así que usa un `id` autonumérico según el criterio de
-  `spec/db/general.md`.
+- **Full snapshot, not a per-field diff**: each row represents the
+  full state of the station right before the update that replaced it,
+  not just the field that changed. It's simpler to generate (a copy
+  of the existing row) and to query (the full state at any point in
+  the history), at the cost of storing columns that didn't change
+  alongside the ones that did.
+- **Only recorded on updates, not on inserts**: a new station has no
+  "previous state" to save.
+- **Change detection based on source fields**: only `name`,
+  `province`, `latitude`, `longitude`, `altitude` and `synoptic_code`
+  (the fields coming from the API) are compared. `latitude_decimal`
+  and `longitude_decimal` aren't compared separately: they're a
+  deterministic function of `latitude`/`longitude`, so if those
+  haven't changed, neither have their decimal versions.
+- **No natural key**: unlike `stations`, each row is an event (a
+  previous version), not an entity with its own identity, so it uses
+  an auto-numbered `id` per the criteria in `spec/db/general.md`.
 
-## Tabla `control_usuarios`
+## Table `control_users`
 
-Cuentas de acceso al panel de control, con el prefijo `control_`
-acordado en [`spec/control/core.md`](../control/core.md) (única
-excepción a la convención de "sin prefijos técnicos" de este
-documento). Gestionada desde la sección de seguridad del panel (ver
-[`spec/control/module/seguridad.md`](../control/module/seguridad.md)),
-no por un proceso de importación.
+Access accounts for the control panel, with the `control_` prefix
+agreed in [`spec/control/core.md`](../control/core.md) (the only
+exception to this document's "no technical prefixes" convention).
+Managed from the control panel's security section (see
+[`spec/control/module/security.md`](../control/module/security.md)),
+not by an ingestion process.
 
-| Columna              | Tipo        | Nulo | Descripción                                                                 |
+| Column                | Type        | Null | Description                                                                 |
 |-----------------------|-------------|------|--------------------------------------------------------------------------------|
-| `id`                   | `bigint`    | No   | Identificador técnico autonumérico (clave primaria).                          |
-| `login`                | `varchar`   | No   | Identificador de acceso, formato email. Único.                                |
-| `contrasena_hash`      | `varchar`   | No   | Hash Argon2id de la contraseña. Nunca se almacena en claro.                   |
-| `fecha_alta`           | `timestamp` | No   | Fecha/hora de alta del usuario.                                               |
-| `fecha_actualizacion`  | `timestamp` | No   | Fecha/hora de la última modificación (ej. cambio de contraseña).             |
+| `id`                   | `bigint`    | No   | Auto-numbered technical identifier (primary key).                          |
+| `login`                | `varchar`   | No   | Access identifier, email format. Unique.                                |
+| `password_hash`        | `varchar`   | No   | Argon2id hash of the password. Never stored in plain text.                   |
+| `created_at`           | `timestamp` | No   | Date/time the user was created.                                               |
+| `updated_at`           | `timestamp` | No   | Date/time of the last modification (e.g. password change).             |
 
-### Notas de diseño
+### Design notes
 
-- **Clave primaria técnica, no `login`**: aunque `login` es único y
-  estable en la práctica, la pantalla de edición de usuario
-  (`spec/control/module/seguridad.md`) permite modificar los datos del
-  usuario sin excluir explícitamente el propio `login`; usar un `id`
-  autonumérico como clave primaria evita que una futura edición de
-  `login` obligue a propagar el cambio a `control_sesiones` u otras
-  tablas que lo referencien.
-- **`login` único, formato email**: única validación de formato
-  exigida (decidido en `spec/control/module/seguridad.md`); el formato
-  se valida en la capa de servicio del backend (Pydantic), no con un
-  `CHECK` en la base de datos.
-- **`contrasena_hash`**: algoritmo Argon2id, decidido en
-  `spec/control/core.md`. No hay columna de complejidad ni de
-  histórico de contraseñas: no se exigen reglas adicionales.
-- **Baja física**: eliminar un usuario es un `DELETE` real (decidido
-  en `spec/control/module/seguridad.md`), sin columna de estado tipo
-  `activo`.
-- **Auditoría**: `fecha_alta` se fija en la creación; `fecha_actualizacion`
-  se refresca en cada edición (incluido un cambio de contraseña), mismo
-  criterio que el resto de tablas del proyecto (`spec/db/general.md`).
-  Habilita además el filtro "por fecha de alta" previsto en el listado
-  de usuarios (`spec/control/module/seguridad.md`).
+- **Technical primary key, not `login`**: although `login` is unique
+  and stable in practice, the user edit screen
+  (`spec/control/module/security.md`) allows modifying user data
+  without explicitly excluding `login` itself; using an auto-numbered
+  `id` as the primary key avoids a future `login` edit having to
+  propagate the change to `control_sessions` or other tables
+  referencing it.
+- **`login` unique, email format**: the only format validation
+  required (decided in `spec/control/module/security.md`); the format
+  is validated in the backend's service layer (Pydantic), not with a
+  database `CHECK`.
+- **`password_hash`**: Argon2id algorithm, decided in
+  `spec/control/core.md`. There's no complexity or password-history
+  column: no additional rules are enforced.
+- **Physical deletion**: deleting a user is a real `DELETE` (decided
+  in `spec/control/module/security.md`), with no `active`-style
+  status column.
+- **Auditing**: `created_at` is set on creation; `updated_at` is
+  refreshed on every edit (including a password change), same
+  criteria as the rest of the project's tables (`spec/db/general.md`).
+  It also powers the "by creation date" filter planned in the user
+  listing (`spec/control/module/security.md`).
 
-### Pendiente de definir
+### Pending decisions
 
-- Ninguno adicional a los ya recogidos en
-  `spec/control/module/seguridad.md`.
+- None beyond the ones already covered in
+  `spec/control/module/security.md`.
 
-## Tabla `control_sesiones`
+## Table `control_sessions`
 
-Sesiones de servidor del panel de control (token opaco, no JWT —
-decidido en [`spec/control/core.md`](../control/core.md)). Una fila
-por sesión activa o histórica.
+Server-side sessions for the control panel (opaque token, not JWT —
+decided in [`spec/control/core.md`](../control/core.md)). One row per
+active or historical session.
 
-| Columna              | Tipo        | Nulo | Descripción                                                                 |
+| Column                | Type        | Null | Description                                                                 |
 |-----------------------|-------------|------|--------------------------------------------------------------------------------|
-| `token`                | `varchar`   | No   | Identificador de sesión opaco, generado en el login (clave primaria).        |
-| `control_usuario_id`   | `bigint`    | No   | Clave foránea a `control_usuarios.id`: usuario dueño de la sesión.           |
-| `fecha_inicio`         | `timestamp` | No   | Fecha/hora del login que creó la sesión.                                     |
+| `token`                | `varchar`   | No   | Opaque session identifier, generated at login (primary key).        |
+| `user_id`              | `bigint`    | No   | Foreign key to `control_users.id`: the user owning the session.           |
+| `started_at`           | `timestamp` | No   | Date/time of the login that created the session.                                     |
 
-### Notas de diseño
+### Design notes
 
-- **Clave primaria natural**: el propio `token` es el identificador
-  estable que la aplicación recibe en cada petición (cookie
-  `httpOnly`/`secure`) para validar la sesión, por lo que se usa
-  directamente como clave primaria en vez de añadir un `id` técnico.
-- **Sin columna de expiración**: la sesión expira a los
-  `CONTROL_SESSION_TTL_MINUTOS` (variable de entorno, por defecto 15,
-  ver `spec/control/core.md`) contados desde `fecha_inicio`, calculado
-  en cada petición por la capa de servicio de seguridad; no se
-  almacena una fecha de expiración porque el TTL es configurable y
-  cambiarlo no debe requerir reescribir sesiones ya creadas.
-- **Sin renovación**: `fecha_inicio` no se actualiza con el uso
-  (decidido en `spec/control/core.md`); la validez de la sesión se
-  cuenta siempre desde el login.
-- **Borrado en cascada**: al eliminar un usuario (`control_usuarios`,
-  baja física) se eliminan también sus sesiones (`ON DELETE CASCADE`),
-  para que un usuario dado de baja pierda el acceso de inmediato aunque
-  tuviera una sesión todavía vigente.
+- **Natural primary key**: the `token` itself is the stable
+  identifier the application receives on every request (`httpOnly`/
+  `secure` cookie) to validate the session, so it's used directly as
+  the primary key instead of adding a technical `id`.
+- **No expiration column**: the session expires
+  `CONTROL_SESSION_TTL_MINUTES` (environment variable, defaulting to
+  15, see `spec/control/core.md`) after `started_at`, computed on
+  every request by the security service layer; no expiration date is
+  stored because the TTL is configurable and changing it shouldn't
+  require rewriting already-created sessions.
+- **No renewal**: `started_at` isn't updated with use (decided in
+  `spec/control/core.md`); a session's validity is always counted
+  from login.
+- **Cascading delete**: deleting a user (`control_users`, physical
+  deletion) also deletes their sessions (`ON DELETE CASCADE`), so a
+  deleted user immediately loses access even if they had a still
+  valid session.
 
-### Pendiente de definir
+### Pending decisions
 
-- Ninguno adicional a los ya recogidos en `spec/control/core.md`.
+- None beyond the ones already covered in `spec/control/core.md`.

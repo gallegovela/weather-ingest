@@ -1,10 +1,9 @@
-# Imagen del frontend del panel de control (SPA React servida como
-# estáticos). Ver spec/control/core.md, "Despliegue": contenedorizado
-# con Docker, como servicio nuevo en el docker-compose.yml de la raíz
-# del proyecto. El enrutado hacia /api (proxy al contenedor
-# control-backend) lo resuelve el nginx externo del servidor de
-# destino, fuera del alcance de este proyecto — este contenedor solo
-# sirve los ficheros estáticos del build.
+# Control panel frontend image (React SPA served as static files).
+# See spec/control/core.md, "Deployment": containerized with Docker,
+# as a new service in the project root's docker-compose.yml. Routing
+# to /api (proxy to the control-backend container) is resolved by the
+# target server's external nginx, out of this project's scope — this
+# container only serves the build's static files.
 
 FROM node:20-alpine AS build
 WORKDIR /app

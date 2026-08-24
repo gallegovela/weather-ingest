@@ -1,6 +1,6 @@
-# Imagen del backend del panel de control (API FastAPI).
-# Ver spec/control/core.md, "Despliegue": contenedorizado con Docker,
-# como servicio nuevo en el docker-compose.yml de la raíz del proyecto.
+# Control panel backend image (FastAPI API).
+# See spec/control/core.md, "Deployment": containerized with Docker,
+# as a new service in the project root's docker-compose.yml.
 
 FROM python:3.12-slim
 

@@ -7,7 +7,7 @@ web-based control panel.
 
 ## What this is
 
-- **`importa/`** — ingestion scripts that pull data from AEMET
+- **`ingest/`** — ingestion scripts that pull data from AEMET
   OpenData and load it into PostgreSQL. Currently imports the
   catalogue of climatological stations; more resources (e.g. daily
   climatological values) will be added as their own jobs, reusing the
@@ -27,7 +27,7 @@ specifics.
 
 ```
 db/                  # Database schema module (Alembic migrations). See spec/db/.
-importa/             # Ingestion scripts (one per data source/resource).
+ingest/              # Ingestion scripts (one per data source/resource).
 control/             # Control panel (SPA + API). See spec/control/.
 ├── backend/          # FastAPI API (service + DAO layers).
 └── frontend/         # React SPA (Vite).
@@ -51,12 +51,12 @@ key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
 3. Apply database migrations:
    ```
    source .venv/bin/activate
-   pip install -r db/requirements.txt -r importa/requirements.txt
+   pip install -r db/requirements.txt -r ingest/requirements.txt
    python db/migrate.py upgrade
    ```
 4. Run an ingestion job, e.g. the station inventory:
    ```
-   python -m importa.estaciones
+   python -m ingest.stations
    ```
 5. (Optional) Run the control panel:
    ```
@@ -72,7 +72,7 @@ key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
 ## Documentation
 
 - [`CLAUDE.md`](CLAUDE.md) — project conventions, setup, and common
-  commands (in Spanish, the project's working language).
+  commands.
 - [`spec/`](spec/) — full specification: ingestion jobs, database
   schema, and control panel modules.
 

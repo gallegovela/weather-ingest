@@ -1,161 +1,173 @@
 # weather
 
-## Especificación del proyecto
+## Language policy
 
-Toda la especificación y definición detallada del proyecto (scripts
-de importación, tablas de base de datos, y lo que se vaya añadiendo)
-está documentada en los ficheros `.md` dentro de las distintas
-secciones de la carpeta `spec/` (ej. `spec/importa/`, `spec/db/`).
+**The whole project is written in English**: code (modules, functions,
+variables), file/folder names, the database schema (tables, columns,
+indexes, constraints), API routes/query params, environment variable
+names, and all documentation (`CLAUDE.md`, `spec/`, READMEs, code
+comments). The only exception is **domain data** — real-world Spanish
+place names (provinces, station names) coming from AEMET — which is
+data, not code, and stays as-is. User-facing text in the control
+panel UI (labels, buttons, messages) is currently in Spanish and is
+**not** part of this policy; it may be addressed separately later.
 
-**Antes de trabajar en cualquier parte del proyecto hay que revisar
-por completo esta documentación** para tener una visión completa y
-actualizada del proyecto, no solo la sección que parezca relevante
-a simple vista.
+## Project specification
 
-## Resumen del proyecto
+The full specification of the project (import scripts, database
+tables, and whatever gets added later) is documented in the `.md`
+files under the different sections of the `spec/` folder (e.g.
+`spec/ingest/`, `spec/db/`).
 
-App en Python que importa información meteorológica desde una API externa
-(script/job de ingesta). El objetivo, alcance detallado y destino de los
-datos se irán definiendo en este documento a medida que avancemos.
+**Before working on any part of the project you must review this
+documentation in full** to have a complete, up-to-date picture of the
+project, not just the section that looks relevant at first glance.
 
-- **Tipo de app:** script / job de ingesta (no es un servicio web por ahora)
-- **Lenguaje:** Python
-- **API de origen:** TBD — pendiente de elegir (ej. OpenWeatherMap, AEMET,
+## Project summary
+
+Python app that ingests weather data from an external API
+(ingestion script/job). The objective, detailed scope, and
+destination of the data will keep being defined in this document as
+we move forward.
+
+- **App type:** ingestion script/job (not a web service for now)
+- **Language:** Python
+- **Source API:** TBD — pending choice (e.g. OpenWeatherMap, AEMET,
   Open-Meteo, etc.)
-- **Destino de los datos:** TBD — ¿archivo, base de datos, otro sistema?
-- **Frecuencia de ingesta:** TBD — ¿bajo demanda, cron, scheduler?
+- **Data destination:** TBD — file, database, another system?
+- **Ingestion frequency:** TBD — on demand, cron, scheduler?
 
-## Estructura del proyecto
+## Project structure
 
 ```
-db/                  # Módulo autocontenido de construcción de BD (Alembic).
-                     # Ver spec/db/general.md.
-importa/             # Scripts de ingesta (uno por recurso de origen).
-├── requirements.txt # Dependencias propias del módulo de ingesta.
-├── config.py        # Carga de .env (AEMET_API_KEY, DATABASE_URL).
-├── aemet_client.py  # Cliente genérico del patrón de dos pasos de AEMET.
-├── db.py            # Conexión psycopg (SQL puro, sin ORM).
-└── estaciones.py     # Job: inventario de estaciones (spec/importa/ESTACIONES.md).
-control/             # Panel de control (SPA + API). Ver spec/control/.
-├── backend/          # API FastAPI (capas servicio + DAO), entorno virtual
-│                     # y requirements.txt propios, independiente del resto.
-│   ├── main.py        # Arranque FastAPI, monta el router de cada módulo.
-│   ├── core/           # Transversal: config (.env), conexión a Postgres,
-│                       # validación de sesión (core/auth.py).
-│   └── modulos/        # Un módulo = una carpeta (seguridad, estaciones, ...),
-│                       # cada una con router.py/servicio.py/dao.py/esquemas.py.
-└── frontend/         # SPA React (Vite), node_modules propio, independiente.
-    ├── vite.config.js  # Proxy de /api hacia control/backend en desarrollo.
+db/                  # Self-contained database build module (Alembic).
+                     # See spec/db/general.md.
+ingest/              # Ingestion scripts (one per source resource).
+├── requirements.txt # Dependencies specific to the ingest module.
+├── config.py        # .env loading (AEMET_API_KEY, DATABASE_URL).
+├── aemet_client.py  # Generic client for AEMET's two-step pattern.
+├── db.py            # psycopg connection (plain SQL, no ORM).
+└── stations.py       # Job: station inventory (spec/ingest/STATIONS.md).
+control/             # Control panel (SPA + API). See spec/control/.
+├── backend/          # FastAPI API (service + DAO layers), own virtual
+│                     # environment and requirements.txt, independent
+│                     # of the rest of the project.
+│   ├── main.py        # FastAPI startup, mounts each module's router.
+│   ├── core/           # Cross-cutting: config (.env), Postgres
+│                       # connection, session validation (core/auth.py).
+│   └── modules/         # A module = a folder (security, stations, ...),
+│                       # each with router.py/service.py/dao.py/schemas.py.
+└── frontend/         # React SPA (Vite), own node_modules, independent.
+    ├── vite.config.js  # /api proxy to control/backend in development.
     └── src/
-        ├── app/         # Transversal: Layout (menú lateral), Login,
-        │                # RequireAuth (guard de sesión), apiClient.
-        └── modulos/      # Un módulo = una carpeta (seguridad, estaciones, ...),
-                          # con sus pantallas y su <modulo>Api.js.
-spec/                # Especificación del proyecto (ver arriba).
-docker-compose.yml   # PostgreSQL local de desarrollo.
-.env                 # Variables de entorno (no versionado).
+        ├── app/         # Cross-cutting: Layout (side menu), Login,
+        │                # RequireAuth (session guard), apiClient.
+        └── modules/      # A module = a folder (security, stations, ...),
+                          # with its own screens and its <module>Api.js.
+spec/                # Project specification (see above).
+docker-compose.yml   # Local development PostgreSQL.
+.env                 # Environment variables (not versioned).
 ```
 
-Cada job de importación futuro (valores climatológicos diarios, etc.)
-añade su propio módulo dentro de `importa/`, reutilizando
-`aemet_client.py` y `db.py`. Cada módulo futuro del panel de control
-añade su propia carpeta dentro de `control/backend/modulos/` y
-`control/frontend/src/modulos/`, siguiendo el patrón fijado por el
-módulo `estaciones` (ver `spec/control/core.md`).
+Each future ingestion job (daily climatological values, etc.) adds
+its own module inside `ingest/`, reusing `aemet_client.py` and
+`db.py`. Each future control panel module adds its own folder inside
+`control/backend/modules/` and `control/frontend/src/modules/`,
+following the pattern set by the `stations` module (see
+`spec/control/core.md`).
 
-## Setup / entorno
+## Setup / environment
 
-- **Gestor de dependencias:** `pip` + `venv` (un único `.venv/` en la
-  raíz del proyecto para `db/`/`importa/`, no versionado).
-  `control/backend/` tiene su propio `.venv/` independiente (ver
-  `spec/control/core.md`), también no versionado. `control/frontend/`
-  usa `npm` con su propio `node_modules/` (no versionado).
-- **Variables de entorno** (fichero `.env` en la raíz, no versionado,
-  compartido por `db/`, `importa/` y `control/backend/`):
-  - `AEMET_API_KEY` — API key de AEMET OpenData.
-  - `DATABASE_URL` — cadena de conexión a PostgreSQL, formato
-    SQLAlchemy con el driver `psycopg` v3 explícito:
-    `postgresql+psycopg://usuario:password@host:5432/bd`.
-  - `CONTROL_SESSION_TTL_MINUTOS` — minutos de validez de una sesión
-    del panel de control desde el login, sin renovación (por defecto
-    `15` si no se define — ver `spec/control/core.md`).
-- **Base de datos local:** `docker-compose.yml` levanta un PostgreSQL
-  de desarrollo con las credenciales que ya están en `.env`
-  (`weather`/`weather`/`weather`). Arrancar con `docker compose up -d`.
-- **Instalación de dependencias:**
+- **Dependency manager:** `pip` + `venv` (a single `.venv/` at the
+  project root for `db/`/`ingest/`, not versioned).
+  `control/backend/` has its own independent `.venv/` (see
+  `spec/control/core.md`), also not versioned. `control/frontend/`
+  uses `npm` with its own `node_modules/` (not versioned).
+- **Environment variables** (`.env` file at the project root, not
+  versioned, shared by `db/`, `ingest/` and `control/backend/`):
+  - `AEMET_API_KEY` — AEMET OpenData API key.
+  - `DATABASE_URL` — PostgreSQL connection string, SQLAlchemy format
+    with the `psycopg` v3 driver explicit:
+    `postgresql+psycopg://user:password@host:5432/db`.
+  - `CONTROL_SESSION_TTL_MINUTES` — minutes a control panel session
+    stays valid from login, without renewal (defaults to `15` if not
+    set — see `spec/control/core.md`).
+- **Local database:** `docker-compose.yml` starts a development
+  PostgreSQL with the credentials already in `.env`
+  (`weather`/`weather`/`weather`). Start it with `docker compose up -d`.
+- **Installing dependencies:**
   ```
   source .venv/bin/activate
   pip install -r db/requirements.txt
-  pip install -r importa/requirements.txt
+  pip install -r ingest/requirements.txt
   ```
-  Para `control/backend/` (entorno virtual propio):
+  For `control/backend/` (own virtual environment):
   ```
   cd control/backend
   python -m venv .venv
   source .venv/bin/activate
   pip install -r requirements.txt
   ```
-  Para `control/frontend/`:
+  For `control/frontend/`:
   ```
   cd control/frontend
   npm install
   ```
 
-## Comandos habituales
+## Common commands
 
-- `docker compose up -d` — levantar PostgreSQL local.
-- `python db/migrate.py upgrade` — aplicar migraciones pendientes
-  (ver `spec/db/general.md` para el resto de comandos de `migrate.py`).
-- `python -m importa.estaciones` — importar/actualizar el inventario
-  de estaciones climatológicas de AEMET.
-- `cd control/backend && uvicorn main:app --reload` — arrancar la API
-  del panel de control en desarrollo (con el `.venv` propio de
-  `control/backend/` activado).
-- `cd control/frontend && npm run dev` — arrancar la SPA del panel de
-  control en desarrollo (necesita el backend arrancado en paralelo,
-  ver `control/frontend/README.md`). Alternativa sin node local:
+- `docker compose up -d` — start the local PostgreSQL.
+- `python db/migrate.py upgrade` — apply pending migrations (see
+  `spec/db/general.md` for the rest of `migrate.py` commands).
+- `python -m ingest.stations` — import/update the AEMET
+  climatological station inventory.
+- `cd control/backend && uvicorn main:app --reload` — start the
+  control panel API in development (with `control/backend/`'s own
+  `.venv` activated).
+- `cd control/frontend && npm run dev` — start the control panel SPA
+  in development (needs the backend running in parallel, see
+  `control/frontend/README.md`). Alternative without local node:
   `docker compose --profile dev up control-frontend-dev`.
-- `docker compose build control-frontend` — construir la imagen de
-  producción del frontend (build de Vite + nginx) sin necesitar node
-  en local.
+- `docker compose build control-frontend` — build the frontend
+  production image (Vite build + nginx) without needing node locally.
 
-## Convenciones de código
+## Code conventions
 
-- Español para nombres de tablas/columnas y para la documentación en
-  `spec/`; el código Python (módulos, funciones, variables) también en
-  español, siguiendo el dominio del proyecto.
-- Cada script de importación es responsable de su propia transformación
-  y carga (upsert); no hay ORM ni modelos compartidos con `db/`
-  (que solo gestiona el esquema vía migraciones, ver
-  `spec/db/general.md`).
-- SQL puro con parámetros nombrados (`%(clave)s` de psycopg), sin
-  query builders.
+- English for everything: table/column names, `spec/` documentation,
+  and Python code (modules, functions, variables) — see "Language
+  policy" above. Real-world Spanish domain data (station names,
+  provinces) is left as-is since it's data, not code.
+- Each ingestion script is responsible for its own transform and load
+  (upsert); there's no ORM or models shared with `db/` (which only
+  manages the schema via migrations, see `spec/db/general.md`).
+- Plain SQL with named parameters (psycopg's `%(key)s`), no query
+  builders.
 
-## Notas sobre la API externa
+## Notes on the external API
 
-- **AEMET OpenData**, autenticación por cabecera `api_key`
+- **AEMET OpenData**, authenticated via the `api_key` header
   (`AEMET_API_KEY`).
-- Patrón de dos pasos (petición inicial → URL temporal `datos` →
-  contenido real) y codificación `ISO-8859-15` en la respuesta de
-  datos: ver `spec/importa/ESTACIONES.md` para el detalle, encapsulado
-  en `importa/aemet_client.py`.
+- Two-step pattern (initial request → temporary `datos` URL → actual
+  content) and `ISO-8859-15` encoding in the data response: see
+  `spec/ingest/STATIONS.md` for the detail, encapsulated in
+  `ingest/aemet_client.py`.
 
-## Decisiones y contexto adicional
+## Decisions and additional context
 
-- **PostgreSQL local vía Docker Compose** (`docker-compose.yml`, raíz
-  del proyecto): no hay servidor de producción todavía, así que el
-  entorno de desarrollo se levanta con un contenedor cuyas credenciales
-  coinciden con `DATABASE_URL` en `.env`.
-- **`DATABASE_URL` usa el esquema `postgresql+psycopg://`** (no
-  `postgresql://` a secas): SQLAlchemy/Alembic necesitan el sufijo de
-  dialecto para elegir el driver `psycopg` v3 en vez de `psycopg2`
-  (que no está instalado).
-- **Primera migración creada**: `create_estaciones`
-  (`db/migrations/versions/20260822_2051_f54155bc39b7_create_estaciones.py`),
-  con `latitud_decimal`/`longitud_decimal` como `NUMERIC(9,6)`
-  (precisión suficiente para coordenadas en grados decimales).
-- **Ingesta sin ORM ni SQLAlchemy**: `importa/` usa `psycopg` v3
-  directamente con SQL puro (`INSERT ... ON CONFLICT`), independiente
-  de `db/` (que solo gestiona el esquema).
-- **Librería HTTP:** `requests`, por simplicidad (script síncrono, sin
-  necesidad de concurrencia).
+- **Local PostgreSQL via Docker Compose** (`docker-compose.yml`,
+  project root): there's no production server yet, so the
+  development environment is started with a container whose
+  credentials match `DATABASE_URL` in `.env`.
+- **`DATABASE_URL` uses the `postgresql+psycopg://` scheme** (not
+  plain `postgresql://`): SQLAlchemy/Alembic need the dialect suffix
+  to pick the `psycopg` v3 driver instead of `psycopg2` (which isn't
+  installed).
+- **First migration created**: `create_stations`
+  (`db/migrations/versions/20260822_2051_f54155bc39b7_create_stations.py`),
+  with `latitude_decimal`/`longitude_decimal` as `NUMERIC(9,6)`
+  (enough precision for coordinates in decimal degrees).
+- **Ingestion without ORM or SQLAlchemy**: `ingest/` uses `psycopg` v3
+  directly with plain SQL (`INSERT ... ON CONFLICT`), independent of
+  `db/` (which only manages the schema).
+- **HTTP library:** `requests`, for simplicity (synchronous script, no
+  need for concurrency).

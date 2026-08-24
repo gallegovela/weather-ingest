@@ -1,14 +1,14 @@
 import { Center, Loader } from "@mantine/core";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
-import { SesionContext } from "./SesionContext";
-import { useSesionQuery } from "./useSesionQuery";
+import { SessionContext } from "./SessionContext";
+import { useSessionQuery } from "./useSessionQuery";
 
-// Guard de sesión transversal (spec/control/core.md, "Autenticación"):
-// sin sesión válida no se accede a ninguna ruta del panel.
+// Cross-cutting session guard (spec/control/core.md, "Authentication"):
+// without a valid session no panel route is accessible.
 export function RequireAuth() {
   const location = useLocation();
-  const { data, isLoading, isError } = useSesionQuery();
+  const { data, isLoading, isError } = useSessionQuery();
 
   if (isLoading) {
     return (
@@ -23,8 +23,8 @@ export function RequireAuth() {
   }
 
   return (
-    <SesionContext.Provider value={data}>
+    <SessionContext.Provider value={data}>
       <Outlet />
-    </SesionContext.Provider>
+    </SessionContext.Provider>
   );
 }

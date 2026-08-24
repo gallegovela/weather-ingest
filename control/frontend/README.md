@@ -1,39 +1,39 @@
 # control/frontend
 
-SPA en React (Vite) del panel de control. Ver
-[`spec/control/core.md`](../../spec/control/core.md) y
-[`spec/control/module/`](../../spec/control/module/) para la especificación
-completa.
+React SPA (Vite) for the control panel. See
+[`spec/control/core.md`](../../spec/control/core.md) and
+[`spec/control/module/`](../../spec/control/module/) for the full
+specification.
 
-## Desarrollo
+## Development
 
 ```
 npm install
 npm run dev
 ```
 
-El servidor de desarrollo de Vite expone un proxy de `/api` hacia
-`control/backend/` (`http://localhost:8000`, ver `vite.config.js`), así
-que hay que tener el backend arrancado en paralelo (`cd ../backend &&
-uvicorn main:app --reload`).
+Vite's dev server exposes an `/api` proxy to `control/backend/`
+(`http://localhost:8000`, see `vite.config.js`), so the backend needs
+to be running in parallel (`cd ../backend && uvicorn main:app --reload`).
 
-### Alternativa sin node local: Docker
+### Alternative without local node: Docker
 
-Si no se quiere instalar node en la máquina, el servicio
-`control-frontend-dev` del `docker-compose.yml` de la raíz levanta el
-mismo servidor de desarrollo de Vite (con hot-reload, montando este
-directorio como volumen) dentro de un contenedor:
+If you don't want to install node on the machine, the
+`control-frontend-dev` service in the root `docker-compose.yml` starts
+the same Vite dev server (with hot-reload, mounting this directory as
+a volume) inside a container:
 
 ```
 docker compose --profile dev up control-frontend-dev
 ```
 
-Expone la SPA en `http://localhost:5173`. El backend (`control-backend`)
-tiene que estar arrancado en paralelo (contenedor o local); el proxy de
-`/api` apunta al contenedor `control-backend` en vez de `localhost`
-cuando se ejecuta así (ver `VITE_PROXY_TARGET` en `docker-compose.yml`).
+Exposes the SPA at `http://localhost:5173`. The backend
+(`control-backend`) needs to be running in parallel (container or
+local); the `/api` proxy points to the `control-backend` container
+instead of `localhost` when run this way (see `VITE_PROXY_TARGET` in
+`docker-compose.yml`).
 
-## Build de producción
+## Production build
 
 ```
 npm run build

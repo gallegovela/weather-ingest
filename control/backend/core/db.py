@@ -1,9 +1,9 @@
-"""Conexión a PostgreSQL para control/backend/.
+"""PostgreSQL connection for control/backend/.
 
-Igual que importa/db.py: psycopg v3 directo, sin ORM, SQL puro (ver
-spec/db/general.md). Se expone como dependencia FastAPI: una conexión
-por petición, con commit al finalizar sin errores y rollback si la
-petición falla.
+Same as ingest/db.py: psycopg v3 directly, no ORM, plain SQL (see
+spec/db/general.md). Exposed as a FastAPI dependency: one connection
+per request, committed when the request finishes without errors and
+rolled back if the request fails.
 """
 
 from collections.abc import Iterator

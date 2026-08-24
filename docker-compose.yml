@@ -1,9 +1,9 @@
-# Servicios del proyecto weather. `postgres` es la base de datos local
-# de desarrollo (credenciales coinciden con DATABASE_URL en .env, ver
-# spec/db/general.md). `control-backend` y `control-frontend` son el
-# panel de control, contenedorizados según spec/control/core.md,
-# "Despliegue": el enrutado externo hacia ellos (dominio, TLS) lo hace
-# el nginx del servidor de destino, gestionado fuera de este proyecto.
+# Services for the weather project. `postgres` is the local
+# development database (credentials match DATABASE_URL in .env, see
+# spec/db/general.md). `control-backend` and `control-frontend` are
+# the control panel, containerized per spec/control/core.md,
+# "Deployment": external routing to them (domain, TLS) is done by the
+# target server's nginx, managed outside this project.
 services:
   postgres:
     image: postgres:16
@@ -21,11 +21,11 @@ services:
     build: ./control/backend
     restart: unless-stopped
     environment:
-      # Dentro de la red de docker-compose, postgres se resuelve por
-      # nombre de servicio en vez de localhost (ver spec/db/general.md
-      # para el resto del DSN, credenciales de docker-compose).
+      # Within the docker-compose network, postgres resolves by
+      # service name instead of localhost (see spec/db/general.md for
+      # the rest of the DSN, docker-compose credentials).
       DATABASE_URL: postgresql+psycopg://weather:weather@postgres:5432/weather
-      CONTROL_SESSION_TTL_MINUTOS: ${CONTROL_SESSION_TTL_MINUTOS:-15}
+      CONTROL_SESSION_TTL_MINUTES: ${CONTROL_SESSION_TTL_MINUTES:-15}
     depends_on:
       - postgres
     ports:
@@ -39,18 +39,18 @@ services:
     ports:
       - "8083:80"
 
-  # Servidor de desarrollo de Vite en contenedor: alternativa a instalar
-  # node en local para trabajar en control/frontend/ (ver
-  # control/frontend/README.md). No arranca con `docker compose up` porque
-  # está en el perfil "dev": hay que pedirlo explícitamente con
-  # `docker compose --profile dev up control-frontend-dev`.
+  # Containerized Vite dev server: alternative to installing node
+  # locally to work on control/frontend/ (see
+  # control/frontend/README.md). Doesn't start with `docker compose up`
+  # because it's in the "dev" profile: it must be requested explicitly
+  # with `docker compose --profile dev up control-frontend-dev`.
   control-frontend-dev:
     image: node:20-alpine
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --port 5173"
     environment:
-      # Dentro de la red de docker-compose, control-backend se resuelve
-      # por nombre de servicio en vez de localhost (ver vite.config.js).
+      # Within the docker-compose network, control-backend resolves by
+      # service name instead of localhost (see vite.config.js).
       VITE_PROXY_TARGET: http://control-backend:8000
     depends_on:
       - control-backend

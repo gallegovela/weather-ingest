@@ -1,202 +1,195 @@
-# Construcción de la base de datos (PostgreSQL + Alembic)
+# Database build (PostgreSQL + Alembic)
 
-Este documento describe cómo se construye y versiona el esquema de
-la base de datos del proyecto. Complementa a
-[`spec/db/tables.md`](./tables.md), donde se documenta el diseño de
-cada tabla: aquí se documenta el **mecanismo** (herramienta, rutas,
-convenciones y flujo de trabajo), no el contenido de las tablas.
+This document describes how the project's database schema is built
+and versioned. It complements
+[`spec/db/tables.md`](./tables.md), where each table's design is
+documented: this document covers the **mechanism** (tooling, paths,
+conventions and workflow), not the content of the tables.
 
-## Motor de base de datos
+## Database engine
 
-- **Motor:** PostgreSQL.
-- **Herramienta de migraciones:** [Alembic](https://alembic.sqlalchemy.org/),
-  usado en modo **SQL puro** (migraciones escritas a mano con
-  `op.execute(...)` / helpers de `alembic.op`), **sin** necesidad de
-  definir modelos ORM de SQLAlchemy. Alembic se usa únicamente como
-  motor de versionado y aplicación de migraciones.
+- **Engine:** PostgreSQL.
+- **Migration tool:** [Alembic](https://alembic.sqlalchemy.org/),
+  used in **plain SQL** mode (migrations hand-written with
+  `op.execute(...)` / `alembic.op` helpers), **without** needing to
+  define SQLAlchemy ORM models. Alembic is used purely as the
+  versioning and migration-application engine.
 
-## Independencia respecto al resto de la aplicación
+## Independence from the rest of the application
 
-La construcción de la base de datos es un módulo **autocontenido**,
-independiente del código de ingesta (scripts de importación). Vive
-en su propia carpeta en la raíz del proyecto y no comparte código,
-dependencias de import ni ciclo de vida con el resto de la app: se
-puede crear/migrar la base de datos sin ejecutar ni importar nada
-del resto del proyecto, y viceversa.
+The database build is a **self-contained** module, independent of
+the ingestion code (import scripts). It lives in its own folder at
+the project root and shares no code, import dependencies, or
+lifecycle with the rest of the app: the database can be
+created/migrated without running or importing anything else from the
+project, and vice versa.
 
-## Estructura de directorios
+## Directory structure
 
-Todas las rutas son relativas a la raíz del proyecto
-(`/var/www/weather`):
+All paths are relative to the project root (`/var/www/weather`):
 
 ```
-db/                             # Módulo independiente de construcción de BD
-├── alembic.ini                 # Configuración de Alembic (lee DATABASE_URL del entorno)
-├── requirements.txt            # Dependencias propias de este módulo (alembic, psycopg, python-dotenv)
-├── migrate.py                  # Script de actualización (wrapper de entrada, ver más abajo)
+db/                             # Independent database build module
+├── alembic.ini                 # Alembic configuration (reads DATABASE_URL from the environment)
+├── requirements.txt            # Dependencies specific to this module (alembic, psycopg, python-dotenv)
+├── migrate.py                  # Update script (entry-point wrapper, see below)
 └── migrations/
-    ├── env.py                  # Entry point de Alembic: conexión a BD y contexto de migración
-    ├── script.py.mako          # Plantilla usada al generar nuevas migraciones
-    └── versions/                # Una tabla/cambio documentado en spec/db/tables.md = una migración
-        ├── 20260822_1030_a1b2c3_create_estaciones.py
+    ├── env.py                  # Alembic entry point: DB connection and migration context
+    ├── script.py.mako          # Template used when generating new migrations
+    └── versions/                # One table/change documented in spec/db/tables.md = one migration
+        ├── 20260822_1030_a1b2c3_create_stations.py
         └── ...
 ```
 
-- `db/` es hermana de `spec/`, `.env`, `CLAUDE.md`, etc. en la raíz
-  del proyecto — no cuelga de ningún futuro `src/` de la aplicación.
-- `db/requirements.txt` se mantiene separado del/los `requirements.txt`
-  de la app de ingesta, precisamente para que este módulo pueda
-  instalarse y ejecutarse de forma aislada (por ejemplo, en un paso
-  de despliegue distinto).
+- `db/` is a sibling of `spec/`, `.env`, `CLAUDE.md`, etc. at the
+  project root — it doesn't hang off any future application `src/`.
+- `db/requirements.txt` is kept separate from the ingestion app's
+  `requirements.txt`, precisely so this module can be installed and
+  run in isolation (e.g. in a separate deployment step).
 
-## Variables de entorno
+## Environment variables
 
-Se reutiliza el mismo `.env` de la raíz del proyecto (no versionado).
-Nuevas variables necesarias para este módulo:
+The same project-root `.env` is reused (not versioned). New
+variables needed by this module:
 
-| Variable       | Descripción                                              | Ejemplo                                              |
+| Variable       | Description                                              | Example                                              |
 |----------------|-----------------------------------------------------------|-------------------------------------------------------|
-| `DATABASE_URL` | Cadena de conexión a PostgreSQL usada por Alembic y por la app | `postgresql+psycopg://weather:******@localhost:5432/weather` |
+| `DATABASE_URL` | PostgreSQL connection string used by Alembic and by the app | `postgresql+psycopg://weather:******@localhost:5432/weather` |
 
-**Nota sobre el esquema de la URL:** se usa `postgresql+psycopg://`
-(no `postgresql://` a secas). SQLAlchemy elige `psycopg2` por defecto
-para el esquema genérico `postgresql://`, y este proyecto usa
-`psycopg` v3 (ver más abajo), que no está instalado — hay que ser
-explícitos con el sufijo `+psycopg` del dialecto.
+**Note on the URL scheme:** `postgresql+psycopg://` is used (not
+plain `postgresql://`). SQLAlchemy picks `psycopg2` by default for
+the generic `postgresql://` scheme, and this project uses `psycopg`
+v3 (see below), which isn't installed — the `+psycopg` dialect suffix
+must be explicit.
 
-`db/alembic.ini` no contiene la cadena de conexión en claro: `env.py`
-la lee de `DATABASE_URL` (cargando `.env` con `python-dotenv`) y se la
-pasa a Alembic en tiempo de ejecución.
+`db/alembic.ini` doesn't contain the connection string in plain text:
+`env.py` reads it from `DATABASE_URL` (loading `.env` with
+`python-dotenv`) and passes it to Alembic at runtime.
 
-## Convenciones de nombres
+## Naming conventions
 
-### Tablas
+### Tables
 
-- Minúsculas, en español, `snake_case`, en **plural** (ej.
-  `estaciones`, `valores_climatologicos`).
-- Nombre de la tabla = concepto de negocio, sin prefijos técnicos
-  (nada de `tbl_`, `t_`, etc.).
+- Lowercase, in English, `snake_case`, **plural** (e.g. `stations`,
+  `climatological_values`).
+- Table name = business concept, no technical prefixes (no `tbl_`,
+  `t_`, etc.).
 
-### Columnas
+### Columns
 
-- Minúsculas, en español, `snake_case`.
-- **Clave primaria natural**: cuando el origen de datos ya trae un
-  identificador estable y único (ej. `indicativo` de AEMET en
-  `estaciones`), se usa esa columna como clave primaria en vez de
-  crear un `id` artificial.
-- **Clave primaria técnica**: si no existe una clave natural clara,
-  se usa `id BIGINT GENERATED ALWAYS AS IDENTITY` (o `BIGSERIAL`).
-- **Claves foráneas**: `<tabla_singular>_<columna_referenciada>`
-  (ej. una futura tabla que referencie a `estaciones` usaría
-  `estacion_indicativo`).
-- **Columnas de auditoría** (obligatorias en toda tabla alimentada
-  por un proceso de importación): `fecha_alta` (timestamp de primera
-  inserción) y `fecha_actualizacion` (timestamp de la última
-  sincronización), tal como se define en `spec/db/tables.md`.
+- Lowercase, in English, `snake_case`.
+- **Natural primary key**: when the data source already provides a
+  stable, unique identifier (e.g. AEMET's `station_code` in
+  `stations`), that column is used as the primary key instead of
+  creating an artificial `id`.
+- **Technical primary key**: if there's no clear natural key, use
+  `id BIGINT GENERATED ALWAYS AS IDENTITY` (or `BIGSERIAL`).
+- **Foreign keys**: `<singular_table>_<referenced_column>` (e.g. a
+  future table referencing `stations` would use `station_code`).
+- **Audit columns** (mandatory on every table fed by an ingestion
+  process): `created_at` (timestamp of first insert) and
+  `updated_at` (timestamp of the last sync), as defined in
+  `spec/db/tables.md`.
 
-### Índices y constraints
+### Indexes and constraints
 
-- Nombre de índice: `ix_<tabla>_<columna(s)>`.
-- Nombre de constraint única: `uq_<tabla>_<columna(s)>`.
-- Nombre de foreign key: `fk_<tabla_origen>_<tabla_destino>`.
+- Index name: `ix_<table>_<column(s)>`.
+- Unique constraint name: `uq_<table>_<column(s)>`.
+- Foreign key name: `fk_<source_table>_<target_table>`.
 
-### Ficheros de migración
+### Migration files
 
-- Se genera con `alembic revision -m "create_estaciones"` (o el
-  wrapper `migrate.py new "create_estaciones"`, ver más abajo).
-- Plantilla de nombre de fichero (configurada en `alembic.ini` vía
+- Generated with `alembic revision -m "create_stations"` (or the
+  `migrate.py new "create_stations"` wrapper, see below).
+- File name template (configured in `alembic.ini` via
   `file_template`):
   `%%(year)d%%(month).2d%%(day).2d_%%(hour).2d%%(minute).2d_%%(rev)s_%%(slug)s`
-  → ejemplo: `20260822_1030_a1b2c3_create_estaciones.py`.
-- Esto da nombres ordenables cronológicamente en el listado de
-  directorio, además del hash de revisión (`rev`) que Alembic
-  necesita internamente para el encadenado de migraciones.
-- **Una migración = un cambio de esquema con entidad propia**: crear
-  una tabla, añadir una columna, crear un índice... No se agrupan
-  cambios sin relación en una misma migración.
+  → example: `20260822_1030_a1b2c3_create_stations.py`.
+- This gives file names that sort chronologically in a directory
+  listing, plus the revision hash (`rev`) that Alembic needs
+  internally for migration chaining.
+- **One migration = one schema change with its own identity**:
+  creating a table, adding a column, creating an index... Unrelated
+  changes are not grouped into the same migration.
 
-## Script de actualización (`db/migrate.py`)
+## Update script (`db/migrate.py`)
 
-Wrapper de línea de comandos, pensado para no tener que recordar la
-sintaxis completa de `alembic` ni sus flags de configuración:
+Command-line wrapper, meant to avoid having to remember the full
+`alembic` syntax and its configuration flags:
 
-| Comando                          | Equivale a                          | Uso                                                  |
+| Command                          | Equivalent to                          | Use                                                  |
 |-----------------------------------|--------------------------------------|-------------------------------------------------------|
-| `python db/migrate.py upgrade`    | `alembic -c db/alembic.ini upgrade head` | Aplica todas las migraciones pendientes.         |
-| `python db/migrate.py downgrade`  | `alembic -c db/alembic.ini downgrade -1` | Revierte la última migración aplicada.           |
-| `python db/migrate.py new "<mensaje>"` | `alembic -c db/alembic.ini revision -m "<mensaje>"` | Crea un nuevo fichero de migración vacío en `versions/`. |
-| `python db/migrate.py current`    | `alembic -c db/alembic.ini current`  | Muestra la última migración aplicada en la BD actual. |
-| `python db/migrate.py history`    | `alembic -c db/alembic.ini history`  | Lista el histórico completo de migraciones.          |
+| `python db/migrate.py upgrade`    | `alembic -c db/alembic.ini upgrade head` | Applies all pending migrations.                  |
+| `python db/migrate.py downgrade`  | `alembic -c db/alembic.ini downgrade -1` | Reverts the last applied migration.              |
+| `python db/migrate.py new "<message>"` | `alembic -c db/alembic.ini revision -m "<message>"` | Creates a new empty migration file in `versions/`. |
+| `python db/migrate.py current`    | `alembic -c db/alembic.ini current`  | Shows the last migration applied to the current DB. |
+| `python db/migrate.py history`    | `alembic -c db/alembic.ini history`  | Lists the full migration history.                    |
 
-Este script es el único punto de entrada recomendado para tocar el
-esquema; se evita ejecutar `alembic` directamente para no olvidar el
-flag `-c db/alembic.ini` (el fichero de configuración no está en la
-raíz del proyecto, sino dentro de `db/`).
+This script is the only recommended entry point for touching the
+schema; it avoids running `alembic` directly so the `-c
+db/alembic.ini` flag isn't forgotten (the configuration file isn't
+at the project root, but inside `db/`).
 
-## Flujo de trabajo para añadir/cambiar una tabla
+## Workflow to add/change a table
 
-1. Documentar (o actualizar) la tabla en `spec/db/tables.md`
-   primero: columnas, tipos, claves, notas de diseño.
-2. Generar la migración: `python db/migrate.py new "create_<tabla>"`.
-3. Escribir el `upgrade()` (DDL de creación/alteración) y el
-   `downgrade()` (DDL inverso) en el fichero generado, usando SQL
-   puro (`op.execute(...)`) o los helpers de `alembic.op`
-   (`op.create_table`, `op.add_column`, etc.) — ambos son válidos,
-   se prioriza la claridad.
-4. Aplicar la migración en local: `python db/migrate.py upgrade`.
-5. Verificar con `python db/migrate.py current`.
+1. Document (or update) the table in `spec/db/tables.md` first:
+   columns, types, keys, design notes.
+2. Generate the migration: `python db/migrate.py new "create_<table>"`.
+3. Write the `upgrade()` (creation/alteration DDL) and the
+   `downgrade()` (inverse DDL) in the generated file, using plain SQL
+   (`op.execute(...)`) or `alembic.op` helpers (`op.create_table`,
+   `op.add_column`, etc.) — both are valid, clarity is prioritized.
+4. Apply the migration locally: `python db/migrate.py upgrade`.
+5. Verify with `python db/migrate.py current`.
 
-## Construcción incremental
+## Incremental build
 
-El esquema completo de la base de datos nunca se define de golpe:
-se construye **exclusivamente** mediante la secuencia ordenada de
-migraciones en `db/migrations/versions/`. Levantar una base de datos
-nueva desde cero consiste siempre en el mismo comando
-(`python db/migrate.py upgrade`), que reproduce el esquema aplicando
-todas las migraciones en orden. No se crean tablas ni se aplican
-cambios de esquema a mano ni por ningún otro medio.
+The full database schema is never defined all at once: it's built
+**exclusively** through the ordered sequence of migrations in
+`db/migrations/versions/`. Bringing up a brand-new database always
+consists of the same command (`python db/migrate.py upgrade`), which
+reproduces the schema by applying all migrations in order. No tables
+are created nor schema changes applied by hand or by any other means.
 
-## Estado de implementación
+## Implementation status
 
-El módulo `db/` ya está implementado siguiendo esta especificación:
-`db/alembic.ini`, `db/migrate.py`, `db/migrations/env.py`,
-`db/migrations/script.py.mako` y `db/migrations/versions/`.
-Dependencias instaladas en un entorno virtual propio del proyecto
-(`.venv/`, no versionado) a partir de `db/requirements.txt`.
+The `db/` module is already implemented following this
+specification: `db/alembic.ini`, `db/migrate.py`,
+`db/migrations/env.py`, `db/migrations/script.py.mako` and
+`db/migrations/versions/`. Dependencies installed in the project's
+own virtual environment (`.venv/`, not versioned) from
+`db/requirements.txt`.
 
-**Driver de conexión elegido:** `psycopg` v3 (paquete `psycopg[binary]`),
-por ser el driver activamente mantenido y recomendado por SQLAlchemy
-para PostgreSQL (`psycopg2` está en modo de mantenimiento).
+**Connection driver chosen:** `psycopg` v3 (`psycopg[binary]`
+package), as it's the actively maintained driver recommended by
+SQLAlchemy for PostgreSQL (`psycopg2` is in maintenance mode).
 
-Ya existe la primera migración real,
-`create_estaciones`, que crea la tabla `estaciones` (ver
-`spec/db/tables.md`). El servidor PostgreSQL de desarrollo se levanta
-con `docker-compose.yml` (raíz del proyecto), con credenciales que
-coinciden con `DATABASE_URL` en `.env`. Aún no hay un servidor de
-producción.
+The first real migration, `create_stations`, already exists and
+creates the `stations` table (see `spec/db/tables.md`). The
+development PostgreSQL server is started with `docker-compose.yml`
+(project root), with credentials matching `DATABASE_URL` in `.env`.
+There's no production server yet.
 
-## Entornos, permisos y backups — decidido
+## Environments, permissions and backups — decided
 
-- **Gestión de entornos:** un único `DATABASE_URL` activo vía `.env`,
-  sin soporte de múltiples entornos dentro del mismo `alembic.ini`.
-  Local hoy, producción cuando exista un servidor; si en el futuro se
-  necesita una base de datos de test, se resuelve con un `.env.test`
-  cargado explícitamente, sin que "entorno" sea un concepto que
-  Alembic tenga que conocer.
-- **Usuario y permisos de PostgreSQL:** un único usuario compartido
-  entre migraciones y aplicación (el mismo que ya usa
-  `docker-compose.yml`, `weather`/`weather` en local). No se separa un
-  usuario con privilegios de DDL de otro de solo lectura/escritura en
-  runtime: esa separación no se justifica sin varios desarrolladores
-  operando sobre la base de datos ni un requisito explícito de mínimo
-  privilegio.
-- **Backups:** no se implementa ninguna estrategia de backup/restore
-  por ahora. Los datos del proyecto son recuperables (reimportables
-  desde la API de AEMET), así que no se justifica esa complejidad
-  adicional en este momento.
-- **Servidor PostgreSQL de producción:** mismo patrón que en local —
-  un contenedor `postgres` más añadido al `docker-compose.yml` del
-  servidor de destino, coherente con la decisión de contenedorizar
-  `control/backend/` y `control/frontend/` (ver
-  [`spec/control/core.md`](../control/core.md)), no un servicio
-  gestionado externo (RDS, Cloud SQL, etc.).
+- **Environment management:** a single active `DATABASE_URL` via
+  `.env`, with no support for multiple environments within the same
+  `alembic.ini`. Local today, production once a server exists; if a
+  test database is ever needed, it's solved with an explicitly loaded
+  `.env.test`, without "environment" being a concept Alembic needs to
+  know about.
+- **PostgreSQL user and permissions:** a single user shared between
+  migrations and the application (the same one `docker-compose.yml`
+  already uses, `weather`/`weather` locally). No separate DDL-privileged
+  user is split from a runtime read/write-only one: that separation
+  isn't justified without several developers operating on the
+  database or an explicit least-privilege requirement.
+- **Backups:** no backup/restore strategy is implemented for now. The
+  project's data is recoverable (re-importable from the AEMET API),
+  so that extra complexity isn't justified at this point.
+- **Production PostgreSQL server:** same pattern as locally — one
+  more `postgres` container added to the target server's
+  `docker-compose.yml`, consistent with the decision to containerize
+  `control/backend/` and `control/frontend/` (see
+  [`spec/control/core.md`](../control/core.md)), not an externally
+  managed service (RDS, Cloud SQL, etc.).

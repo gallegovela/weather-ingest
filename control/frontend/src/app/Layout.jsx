@@ -4,34 +4,34 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { NavLink as RouterNavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { apiClient } from "./apiClient";
-import { useSesionActual } from "./SesionContext";
+import { useCurrentSession } from "./SessionContext";
 
-// Correspondencia directa módulo de la spec -> entrada de menú con sus
-// subitems (spec/control/core.md, "Estructura de la aplicación").
-const MODULOS = [
+// Direct correspondence spec module -> menu entry with its subitems
+// (spec/control/core.md, "Application structure").
+const MODULES = [
   {
-    etiqueta: "Estaciones",
+    label: "Estaciones",
     items: [
-      { etiqueta: "Listado", to: "/estaciones/listado" },
-      { etiqueta: "Mapa", to: "/estaciones/mapa" },
+      { label: "Listado", to: "/stations/list" },
+      { label: "Mapa", to: "/stations/map" },
     ],
   },
   {
-    etiqueta: "Seguridad",
-    items: [{ etiqueta: "Usuarios", to: "/seguridad/usuarios" }],
+    label: "Seguridad",
+    items: [{ label: "Usuarios", to: "/security/users" }],
   },
 ];
 
 export function Layout() {
   const [opened, { toggle }] = useDisclosure();
-  const sesion = useSesionActual();
+  const session = useCurrentSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const logout = useMutation({
-    mutationFn: () => apiClient.post("/seguridad/logout"),
+    mutationFn: () => apiClient.post("/security/logout"),
     onSuccess: () => {
-      queryClient.setQueryData(["sesion"], undefined);
+      queryClient.setQueryData(["session"], undefined);
       navigate("/login", { replace: true });
     },
   });
@@ -50,7 +50,7 @@ export function Layout() {
           </Group>
           <Group>
             <Text size="sm" c="dimmed">
-              {sesion?.login}
+              {session?.login}
             </Text>
             <Button variant="subtle" size="xs" loading={logout.isPending} onClick={() => logout.mutate()}>
               Cerrar sesión
@@ -60,10 +60,10 @@ export function Layout() {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        {MODULOS.map((modulo) => (
-          <NavLink key={modulo.etiqueta} label={modulo.etiqueta} defaultOpened childrenOffset={20}>
-            {modulo.items.map((item) => (
-              <NavLink key={item.to} label={item.etiqueta} component={RouterNavLink} to={item.to} />
+        {MODULES.map((navModule) => (
+          <NavLink key={navModule.label} label={navModule.label} defaultOpened childrenOffset={20}>
+            {navModule.items.map((item) => (
+              <NavLink key={item.to} label={item.label} component={RouterNavLink} to={item.to} />
             ))}
           </NavLink>
         ))}

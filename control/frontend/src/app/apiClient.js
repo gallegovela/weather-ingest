@@ -1,7 +1,7 @@
-// Cliente HTTP transversal: todas las llamadas de control/frontend/ a
-// control/backend/ pasan por aquí. La sesión viaja en una cookie
-// httpOnly (ver spec/control/core.md, "Autenticación"), de ahí
-// `credentials: "include"` en cada petición.
+// Cross-cutting HTTP client: every call from control/frontend/ to
+// control/backend/ goes through here. The session travels in an
+// httpOnly cookie (see spec/control/core.md, "Authentication"), hence
+// `credentials: "include"` on every request.
 
 const BASE_URL = "/api";
 
@@ -26,16 +26,16 @@ async function request(path, options = {}) {
     return null;
   }
 
-  const esJson = res.headers.get("content-type")?.includes("application/json");
-  const datos = esJson ? await res.json() : null;
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const data = isJson ? await res.json() : null;
 
   if (!res.ok) {
-    // Formato de error por defecto de FastAPI: {"detail": "mensaje"}
-    // (ver spec/control/core.md, "Contrato de la API REST").
-    throw new ApiError(res.status, datos?.detail);
+    // FastAPI's default error format: {"detail": "message"}
+    // (see spec/control/core.md, "REST API contract").
+    throw new ApiError(res.status, data?.detail);
   }
 
-  return datos;
+  return data;
 }
 
 export const apiClient = {

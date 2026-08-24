@@ -3,9 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./app/Layout";
 import { Login } from "./app/Login";
 import { RequireAuth } from "./app/RequireAuth";
-import { Mapa as MapaEstaciones } from "./modulos/estaciones/Mapa";
-import { Listado as ListadoEstaciones } from "./modulos/estaciones/Listado";
-import { ListadoUsuarios } from "./modulos/seguridad/ListadoUsuarios";
+import { Map as StationsMap } from "./modules/stations/Map";
+import { List as StationsList } from "./modules/stations/List";
+import { UsersList } from "./modules/security/UsersList";
 
 export default function App() {
   return (
@@ -14,10 +14,10 @@ export default function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
-          <Route index element={<Navigate to="/estaciones/listado" replace />} />
-          <Route path="/estaciones/listado" element={<ListadoEstaciones />} />
-          <Route path="/estaciones/mapa" element={<MapaEstaciones />} />
-          <Route path="/seguridad/usuarios" element={<ListadoUsuarios />} />
+          <Route index element={<Navigate to="/stations/list" replace />} />
+          <Route path="/stations/list" element={<StationsList />} />
+          <Route path="/stations/map" element={<StationsMap />} />
+          <Route path="/security/users" element={<UsersList />} />
         </Route>
       </Route>
 

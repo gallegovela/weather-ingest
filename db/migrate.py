@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Script de actualización de la base de datos.
+"""Database update script.
 
-Punto de entrada único para tocar el esquema, en vez de invocar
-`alembic` directamente (ver spec/db/general.md). Ejecuta siempre
-alembic con cwd=db/ para que `script_location = migrations` en
-alembic.ini se resuelva de forma correcta sin importar desde dónde
-se lance este script.
+Single entry point for touching the schema, instead of invoking
+`alembic` directly (see spec/db/general.md). Always runs alembic with
+cwd=db/ so that `script_location = migrations` in alembic.ini resolves
+correctly regardless of where this script is launched from.
 
-Uso:
+Usage:
     python db/migrate.py upgrade
     python db/migrate.py downgrade
     python db/migrate.py current
     python db/migrate.py history
-    python db/migrate.py new "create_estaciones"
+    python db/migrate.py new "create_stations"
 """
 
 import subprocess
