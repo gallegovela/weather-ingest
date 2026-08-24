@@ -6,6 +6,9 @@ import { RequireAuth } from "./app/RequireAuth";
 import { Map as StationsMap } from "./modules/stations/Map";
 import { List as StationsList } from "./modules/stations/List";
 import { UsersList } from "./modules/security/UsersList";
+import { Stations as StationsJobs } from "./modules/jobs/Stations";
+import { DailyValues as DailyValuesJobs } from "./modules/jobs/DailyValues";
+import { ValuesList as ConfigValuesList } from "./modules/config/ValuesList";
 
 export default function App() {
   return (
@@ -18,6 +21,9 @@ export default function App() {
           <Route path="/stations/list" element={<StationsList />} />
           <Route path="/stations/map" element={<StationsMap />} />
           <Route path="/security/users" element={<UsersList />} />
+          <Route path="/jobs/stations" element={<StationsJobs />} />
+          <Route path="/jobs/daily-values" element={<DailyValuesJobs />} />
+          <Route path="/config/values" element={<ConfigValuesList />} />
         </Route>
       </Route>
 

@@ -20,6 +20,17 @@ const MODULES = [
     label: "Seguridad",
     items: [{ label: "Usuarios", to: "/security/users" }],
   },
+  {
+    label: "Planificador",
+    items: [
+      { label: "Estaciones", to: "/jobs/stations" },
+      { label: "Valores diarios", to: "/jobs/daily-values" },
+    ],
+  },
+  {
+    label: "Config",
+    items: [{ label: "Valores", to: "/config/values" }],
+  },
 ];
 
 export function Layout() {
