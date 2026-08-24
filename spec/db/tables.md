@@ -150,6 +150,18 @@ not by an ingestion process.
   It also powers the "by creation date" filter planned in the user
   listing (`spec/control/module/security.md`).
 
+### Seed data
+
+- **Default admin user**: migration
+  `db/migrations/versions/20260824_1200_cbdb178fe390_seed_control_admin_user.py`
+  inserts a default user (`admin@weather.local` / password `admin`,
+  stored as an Argon2id hash like any other user) so there's always a
+  way to log into the control panel after rebuilding the database
+  from scratch — there's no self-service signup, and creating a user
+  through the API requires already being logged in (see
+  `spec/control/module/security.md`). Change this password after
+  first login in a real environment.
+
 ### Pending decisions
 
 - None beyond the ones already covered in
