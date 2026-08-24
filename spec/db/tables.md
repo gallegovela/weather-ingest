@@ -210,7 +210,7 @@ Natural key: `key`.
 
 | Column        | Type        | Null | Description                                                        |
 |---------------|-------------|------|----------------------------------------------------------------------|
-| `key`         | `varchar`   | No   | Config key (primary key). E.g. `poll_interval_seconds`.              |
+| `key`         | `varchar`   | No   | Config key (primary key), `UPPER_SNAKE_CASE`. E.g. `POLL_INTERVAL_SECONDS`. |
 | `value`       | `varchar`   | No   | Config value, stored as raw text; each consumer parses it to the type it expects (integer, boolean, etc.). |
 | `description` | `varchar`   | No   | Human-readable explanation of what the key controls, shown in the panel. |
 | `updated_at`  | `timestamp` | No   | Date/time of the last edit.                                          |
@@ -230,10 +230,17 @@ Natural key: `key`.
   responsibility of whichever code reads a given key.
 - **Keys are code-defined, not free-form**: the set of valid keys is
   implicitly defined by whichever part of the codebase reads them (e.g.
-  the future ingest worker reading `poll_interval_seconds`). The panel
-  doesn't allow creating or deleting keys — only migrations do — to
-  avoid orphaned keys nothing reads, or missing keys some process
-  expects.
+  the ingest worker reading `POLL_INTERVAL_SECONDS`). The panel doesn't
+  allow creating or deleting keys — only migrations do — to avoid
+  orphaned keys nothing reads, or missing keys some process expects.
+- **Keys are `UPPER_SNAKE_CASE` — decided:** unlike every other
+  identifier in the project (`snake_case`, see `spec/db/general.md`),
+  config keys are uppercase, mirroring environment variable naming.
+  Several keys started life as actual `.env` variables (e.g.
+  `AEMET_API_KEY`), and the ones that didn't (e.g.
+  `SCHEDULER_MAX_DATE_RANGE`) still read like one — keeping a single
+  visual style for "a name you'd look up in config" regardless of
+  where it happens to be stored.
 
 ### Seed data
 
@@ -251,12 +258,19 @@ Natural key: `key`.
   set with a direct `UPDATE` against the running database, never
   committed. `.env`'s `AEMET_API_KEY` isn't read by any code anymore,
   but hasn't been removed from `.env` yet.
-- **`poll_interval_seconds`** — will be seeded when the ingest job
-  worker is implemented (see `spec/ingest/general.md`).
+- **`POLL_INTERVAL_SECONDS`** — `300` (5 minutes). Seconds the job
+  worker sleeps between poll iterations when there's nothing pending
+  (see `spec/ingest/general.md`).
+- **`SCHEDULER_MAX_DATE_RANGE`** — `180` (days). Maximum date range a
+  single `daily_values` job may cover — both the threshold the Jobs
+  module enforces when queuing one (see
+  `spec/control/module/jobs.md`) and the window the ingestion script
+  itself uses against the AEMET endpoint (see
+  `spec/ingest/DAILY_VALUES.md`), the same number reused for both.
 
 ### Pending decisions
 
-- Per-key value validation (e.g. `poll_interval_seconds` must be a
+- Per-key value validation (e.g. `POLL_INTERVAL_SECONDS` must be a
   positive integer) — to be decided as each key is added, documented
   in the spec of whichever module/process introduces it.
 

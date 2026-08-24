@@ -58,8 +58,7 @@ subitem/screen here.
 - Form with three fields, matching the parameters the underlying AEMET
   endpoint itself needs (see
   [`spec/ingest/DAILY_VALUES.md`](../../ingest/DAILY_VALUES.md) for
-  the ingestion script's own detail: AEMET endpoint, chunking, rate
-  limiting):
+  the ingestion script's own detail: AEMET endpoint, rate limiting):
   - **Station**: picker over the existing station catalog (`stations`
     table), searchable by code/name. Reuses the existing `GET
     /api/stations/stations` endpoint (see
@@ -71,10 +70,28 @@ subitem/screen here.
   ..., "date_to": ...}`.
 - **Validation — decided:** both dates are required and `date_from <=
   date_to`, checked in the service layer before queuing (no DB
-  `CHECK`, same criteria as the rest of the project). Whether there's
-  a maximum allowed range doesn't need to be enforced at queueing time
-  — AEMET's own per-request limit is handled by the worker chunking
-  internally (`spec/ingest/general.md`), transparently to the user.
+  `CHECK`, same criteria as the rest of the project).
+- **Maximum range per job — decided: `SCHEDULER_MAX_DATE_RANGE`.** A
+  single `daily_values` job can't span more than
+  `SCHEDULER_MAX_DATE_RANGE` days (`config_values`, seeded at `180` —
+  see `spec/db/tables.md`); the service layer rejects (`400`) a create
+  request that exceeds it. Because of this, by the time a job reaches
+  the worker its range is already guaranteed to fit AEMET's own
+  per-request limit in a single call — the ingestion script doesn't
+  need to chunk it further (see `spec/ingest/DAILY_VALUES.md`).
+- **Splitting a too-large range — decided:** if the user picks a range
+  longer than `SCHEDULER_MAX_DATE_RANGE`, the screen **warns before
+  queuing anything** (reading the current limit via the Config
+  module's `GET /api/config/values`, see
+  [`spec/control/module/config.md`](./config.md)) and offers two
+  choices, instead of just failing on submit:
+  - **Split into N imports**: the screen computes consecutive
+    sub-ranges of at most `SCHEDULER_MAX_DATE_RANGE` days each covering
+    the full selected period, and calls `POST /api/jobs/daily-values`
+    once per sub-range — each becomes its own row in `ingest_jobs`,
+    visible individually in the history list below.
+  - **Redefine the range**: closes the warning without queuing
+    anything, so the user can edit the dates.
 - Same **history list** pattern as the Stations screen, filtered to
   `job_type = 'daily_values'`, plus a filter by `station_code`.
 

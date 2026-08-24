@@ -57,7 +57,7 @@ above (no pagination):
 
 - **Per-key value validation**: whether/how to validate that a given
   key's new value has the right shape (e.g.
-  `poll_interval_seconds` must be a positive integer) before saving
+  `POLL_INTERVAL_SECONDS` must be a positive integer) before saving
   it. To be decided when each key is introduced, documented in the
   spec of whichever module/process needs it (see
   `spec/db/tables.md`, table `config_values`).

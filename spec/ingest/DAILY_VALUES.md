@@ -47,17 +47,22 @@ an HTTP `200` whose body has `estado: 404` and
 limit, which does **not** match what the live API actually enforces
 for this endpoint).
 
-- **Chunking — decided:** when a job's `date_from`/`date_to` spans more
-  than the safe window, the script splits it into sequential
-  sub-requests of **180 days** each (a fixed, conservative margin under
-  the ~6-month limit, avoiding edge cases around variable month
-  lengths), executed one after another within the same job.
+- **No chunking in this script — decided.** The Jobs module enforces
+  `SCHEDULER_MAX_DATE_RANGE` (`config_values`, seeded at `180` days —
+  see `spec/db/tables.md` and `spec/control/module/jobs.md`) when a
+  `daily_values` job is created: a job's range can never exceed it. As
+  long as that config value stays under AEMET's real ~6-month limit
+  (not DB-enforced — an operational assumption, not a constraint the
+  database can check), every job this script processes fits in a
+  **single** AEMET request; there's no internal splitting to do here
+  (contrast with the earlier version of this document, which chunked
+  internally — that's now handled once, at job-creation time, instead
+  of inside every run).
 - **Rate limit:** AEMET limits API usage to roughly 50 requests/minute;
   exceeding it returns `estado: 429` in the response envelope, same
-  shape as any other AEMET error. Unlike the station inventory job
-  (`spec/ingest/STATIONS.md`, "no retries" decision), hitting this
-  limit is an **expected, routine** occurrence for a multi-chunk
-  request, not a rare failure — so this script retries a `429` with
+  shape as any other AEMET error. With one worker running one job at a
+  time (`spec/ingest/general.md`), this is unlikely but not impossible
+  if jobs queue up back-to-back — so this script retries a `429` with
   backoff (fixed short delay, small number of attempts) before giving
   up and marking the job `error`.
 
@@ -136,22 +141,17 @@ Notes:
 ## Job flow (summary)
 
 Executed by the job worker (`spec/ingest/general.md`) for a
-`daily_values` job with `params = {station_code, date_from, date_to}`:
+`daily_values` job with `params = {station_code, date_from, date_to}`
+(already ≤ `SCHEDULER_MAX_DATE_RANGE`, see "Date range limit" above):
 
-1. Split `[date_from, date_to]` into sequential ≤180-day chunks (see
-   "Date range limit" above).
-2. For each chunk, in order:
-   1. Call the endpoint for that chunk and `station_code`.
-   2. On `estado: 429`, retry with backoff (see "Date range limit").
-   3. On any other AEMET error, or after exhausting retries, stop and
-      mark the job `error` with the error detail — chunks already
-      upserted stay in the database (partial progress isn't rolled
-      back; the user can requeue the same range, which upserts
-      idempotently).
-   4. Decode as `ISO-8859-15`, parse the JSON array.
-   5. Transform each record (see "Transformations to apply").
-   6. Upsert each record into `climatological_values`.
-3. Report totals (rows inserted/updated) back on the `ingest_jobs` row
+1. Call the endpoint once for `[date_from, date_to]` and `station_code`.
+2. On `estado: 429`, retry with backoff (see "Date range limit").
+3. On any other AEMET error, or after exhausting retries, mark the job
+   `error` with the error detail.
+4. Decode as `ISO-8859-15`, parse the JSON array.
+5. Transform each record (see "Transformations to apply").
+6. Upsert each record into `climatological_values`.
+7. Report totals (rows inserted/updated) back on the `ingest_jobs` row
    (`spec/db/tables.md`).
 
 ## Implementation
@@ -169,6 +169,7 @@ calling it manually with explicit parameters for debugging).
   Any other error fails the job immediately (same "no retries" spirit
   as `spec/ingest/STATIONS.md` for anything that isn't a routine,
   expected condition).
-- **Chunking — decided: fixed 180-day windows.** See "Date range
-  limit".
+- **No internal chunking — decided.** A job's range is capped at
+  `SCHEDULER_MAX_DATE_RANGE` before it's ever created (see "Date range
+  limit" and `spec/control/module/jobs.md`).
 - **No change history — decided.** See `spec/db/tables.md`.

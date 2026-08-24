@@ -22,6 +22,12 @@ design).
   `pending` row (`FOR UPDATE SKIP LOCKED`, see `spec/db/tables.md`),
   mark it `running`, execute the corresponding ingestion logic, mark it
   `success` or `error` with the result.
+- **Exactly one job per loop iteration — decided:** even if several
+  jobs are `pending`, the worker claims and runs a single one, then
+  sleeps for `POLL_INTERVAL_SECONDS` (see below) before checking again
+  — it never drains the whole backlog in a burst. This bounds how much
+  load the worker can put on AEMET (rate limits) and the database at
+  once, regardless of how many jobs get queued from the panel.
 - **Why a queue instead of running the ingestion synchronously inside
   the API request that creates the job:** a date-range import can take
   long enough (AEMET rate limits, large ranges) to time out an HTTP
@@ -37,9 +43,10 @@ design).
   correct even if more than one worker process is ever run, though
   today there's exactly one.
 - **Poll interval — configurable via `config_values`:** the worker
-  reads the `poll_interval_seconds` key (see `spec/db/tables.md`,
-  table `config_values`) at the start of each loop iteration, so the
-  interval can be changed from the control panel's Config module (see
+  reads the `POLL_INTERVAL_SECONDS` key (see `spec/db/tables.md`, table
+  `config_values`; seeded at `300`, 5 minutes) at the start of each
+  loop iteration, so the interval can be changed from the control
+  panel's Config module (see
   [`spec/control/module/config.md`](../control/module/config.md))
   without redeploying.
 
