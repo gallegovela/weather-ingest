@@ -108,6 +108,93 @@ change.
   previous version), not an entity with its own identity, so it uses
   an auto-numbered `id` per the criteria in `spec/db/general.md`.
 
+## Table `climatological_values`
+
+Stores AEMET's daily climatological values (temperature, precipitation,
+wind, pressure, humidity, sunshine) per station and day, fed by the
+ingestion process described in
+[`spec/ingest/DAILY_VALUES.md`](../ingest/DAILY_VALUES.md).
+
+Natural key: `station_code` + `date`.
+
+| Column                              | Type        | Null | Description                                                                 |
+|--------------------------------------|-------------|------|--------------------------------------------------------------------------------|
+| `station_code`                       | `varchar`   | No   | Foreign key to `stations.station_code`.                                       |
+| `date`                                | `date`      | No   | Day this row's values are for.                                                |
+| `mean_temperature`                    | `decimal`   | Yes  | Daily mean temperature (°C).                                                  |
+| `precipitation_mm`                    | `decimal`   | Yes  | Daily precipitation (mm). `NULL` when `precipitation_raw` is a non-numeric sentinel (`Ip`, `Acum`). |
+| `precipitation_raw`                   | `varchar`   | Yes  | Precipitation exactly as received from AEMET: a plain number, `Ip` (trace, <0.1mm) or `Acum` (accumulated over several days). |
+| `min_temperature`                     | `decimal`   | Yes  | Daily minimum temperature (°C).                                               |
+| `min_temperature_time`                | `varchar`   | Yes  | Time of the minimum temperature (UTC; may be non-time text like `Varias`).    |
+| `max_temperature`                     | `decimal`   | Yes  | Daily maximum temperature (°C).                                               |
+| `max_temperature_time`                | `varchar`   | Yes  | Time of the maximum temperature (UTC; may be non-time text).                  |
+| `wind_gust_direction`                 | `decimal`   | Yes  | Direction of the maximum wind gust (tens of degrees; `88` = no data, `99` = variable direction). |
+| `wind_mean_speed`                     | `decimal`   | Yes  | Daily mean wind speed (m/s).                                                  |
+| `wind_gust_speed`                     | `decimal`   | Yes  | Maximum wind gust speed (m/s).                                                |
+| `wind_gust_time`                      | `varchar`   | Yes  | Time of the maximum wind gust (UTC; may be non-time text).                    |
+| `sunshine_hours`                      | `decimal`   | Yes  | Daily sunshine duration (hours).                                              |
+| `pressure_max`                        | `decimal`   | Yes  | Maximum pressure at the station's reference level (hPa).                      |
+| `pressure_max_time`                   | `varchar`   | Yes  | Time of the maximum pressure (UTC, rounded to the nearest hour).              |
+| `pressure_min`                        | `decimal`   | Yes  | Minimum pressure at the station's reference level (hPa).                      |
+| `pressure_min_time`                   | `varchar`   | Yes  | Time of the minimum pressure (UTC, rounded to the nearest hour).              |
+| `humidity_mean`                       | `decimal`   | Yes  | Daily mean relative humidity (%).                                             |
+| `humidity_max`                        | `decimal`   | Yes  | Daily maximum relative humidity (%).                                          |
+| `humidity_max_time`                   | `varchar`   | Yes  | Time of the maximum relative humidity (UTC; may be non-time text).            |
+| `humidity_min`                        | `decimal`   | Yes  | Daily minimum relative humidity (%).                                          |
+| `humidity_min_time`                   | `varchar`   | Yes  | Time of the minimum relative humidity (UTC; may be non-time text).            |
+| `precipitation_intensity_max`         | `decimal`   | Yes  | Maximum precipitation intensity (mm/h; `-0.3` = inappreciable, <0.1mm/h).      |
+| `precipitation_intensity_max_time`    | `varchar`   | Yes  | Time of the maximum precipitation intensity (UTC; may be non-time text).      |
+| `created_at`                          | `timestamp` | No   | Date/time this row was first inserted.                                        |
+| `updated_at`                          | `timestamp` | No   | Date/time this row was last updated.                                          |
+
+### Design notes
+
+- **Composite natural key (`station_code`, `date`)**: AEMET's source
+  data is already uniquely identified by station and day — one row per
+  station per day — so there's no need for a technical `id`, same
+  criterion as `stations`.
+- **`station`/`province`/`altitude` not duplicated here**: the source
+  API repeats the station's `indicativo`/`nombre`/`provincia`/`altitud`
+  on every daily record, but that data already lives in `stations` and
+  is reachable via the `station_code` foreign key — storing it again
+  per row would duplicate data that can drift out of sync (see
+  `stations_history`) for no benefit.
+- **Decimal comma in the source, not a DB concern**: AEMET returns
+  numeric values as text with a comma decimal separator (e.g. `"6,6"`).
+  This is purely an ingestion-time parsing detail (see
+  `spec/ingest/DAILY_VALUES.md`); the columns here store proper
+  `decimal` values.
+- **`precipitation_raw` alongside `precipitation_mm` — decided:**
+  unlike the other numeric fields, `prec` can carry two non-numeric
+  sentinel values with real meaning (`Ip` = trace rain fell but
+  couldn't be measured, vs. `NULL`/absent = no data at all; `Acum` =
+  this day's figure is folded into a later accumulated reading). Losing
+  that distinction by coercing straight to `NULL` would conflate
+  "trace rain" with "no measurement". The other sentinel-bearing fields
+  (`wind_gust_direction`'s `88`/`99`, `precipitation_intensity_max`'s
+  `-0.3`) are still syntactically valid numbers, so they're stored as
+  plain `decimal` — their special meaning is documented above, not
+  represented structurally.
+- **`*_time` columns are `varchar`, not `time`**: most contain an
+  `HH:MM` value, but AEMET can return non-time text instead (observed
+  in real data: `"Varias"`, meaning the extreme value was reached more
+  than once that day). A `time` column can't hold that.
+- **No change-history table (unlike `stations_history`) — decided:**
+  re-running a `daily_values` job for a date range that overlaps
+  existing rows is an expected, routine way to use this table (e.g.
+  re-importing a period to pick up an AEMET correction), not a rare
+  event worth a full audit trail; and at this table's expected volume
+  (potentially millions of rows across all stations/years), snapshotting
+  every upsert would be costly for little benefit. Revisit if a real
+  need for point-in-time history shows up.
+- **Upsert by (`station_code`, `date`)**: same load strategy as
+  `stations` — insert if new, overwrite if the row already exists.
+
+### Pending decisions
+
+- None beyond the ones already covered in
+  `spec/ingest/DAILY_VALUES.md`.
+
 ## Table `config_values`
 
 Generic key-value store for operational configuration used across the

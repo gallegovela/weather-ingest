@@ -28,7 +28,7 @@ command line or access the database directly.
   own operation (e.g. access users) is created in that same database
   with the **`control_`** prefix (e.g. `control_users`), to
   distinguish them at a glance from business tables (`stations`,
-  future `climatological_values`, `config_values`, etc. — including
+  `climatological_values`, `config_values`, etc. — including
   tables the panel edits but doesn't exclusively own, like
   `config_values`, also read by processes outside `control/`). They're
   managed the same way

@@ -56,9 +56,10 @@ subitem/screen here.
 ### 2. Daily values
 
 - Form with three fields, matching the parameters the underlying AEMET
-  endpoint itself needs (see `spec/ingest/general.md` for how the job
-  is executed; the ingestion script's own AEMET-specific detail is
-  documented separately, when it's implemented):
+  endpoint itself needs (see
+  [`spec/ingest/DAILY_VALUES.md`](../../ingest/DAILY_VALUES.md) for
+  the ingestion script's own detail: AEMET endpoint, chunking, rate
+  limiting):
   - **Station**: picker over the existing station catalog (`stations`
     table), searchable by code/name. Reuses the existing `GET
     /api/stations/stations` endpoint (see
@@ -111,7 +112,3 @@ internally.
 - Whether/how to let a user cancel a `pending` job before the worker
   picks it up — not needed for a first version; revisit if the queue
   grows large enough for it to matter.
-- Full parameter/behavior spec of the `daily_values` ingestion script
-  itself (AEMET endpoint, chunking, rate limiting) — out of scope of
-  this module, will live in its own `spec/ingest/` document when that
-  script is implemented.
