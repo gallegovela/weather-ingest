@@ -1,1 +1,84 @@
 # weather-ingest
+
+A Python data ingestion pipeline for weather data from
+[AEMET OpenData](https://opendata.aemet.es/) (Spain's national
+meteorological agency), backed by PostgreSQL and operated through a
+web-based control panel.
+
+## What this is
+
+- **`importa/`** — ingestion scripts that pull data from AEMET
+  OpenData and load it into PostgreSQL. Currently imports the
+  catalogue of climatological stations; more resources (e.g. daily
+  climatological values) will be added as their own jobs, reusing the
+  same AEMET client and DB helpers.
+- **`db/`** — a self-contained schema module (Alembic migrations) for
+  the PostgreSQL database, independent of the ingestion code.
+- **`control/`** — a web control panel (FastAPI backend + React SPA
+  frontend) for operating and monitoring the system without touching
+  the command line or the database directly: login, station listing
+  and map, user management, with more modules planned.
+
+Each part is documented in detail under [`spec/`](spec/) — that's the
+source of truth for design decisions, data flow, and API/database
+specifics.
+
+## Project layout
+
+```
+db/                  # Database schema module (Alembic migrations). See spec/db/.
+importa/             # Ingestion scripts (one per data source/resource).
+control/             # Control panel (SPA + API). See spec/control/.
+├── backend/          # FastAPI API (service + DAO layers).
+└── frontend/         # React SPA (Vite).
+spec/                # Full project specification.
+docker-compose.yml   # Local PostgreSQL + control panel containers.
+```
+
+## Getting started
+
+Requirements: Python 3, Node.js (or Docker, see below), Docker
+Compose, and an [AEMET OpenData API
+key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
+
+1. Create a `.env` file at the project root with your AEMET API key
+   and database connection string (see `CLAUDE.md` for the full list
+   of expected variables: `AEMET_API_KEY`, `DATABASE_URL`, etc.).
+2. Start the local database:
+   ```
+   docker compose up -d
+   ```
+3. Apply database migrations:
+   ```
+   source .venv/bin/activate
+   pip install -r db/requirements.txt -r importa/requirements.txt
+   python db/migrate.py upgrade
+   ```
+4. Run an ingestion job, e.g. the station inventory:
+   ```
+   python -m importa.estaciones
+   ```
+5. (Optional) Run the control panel:
+   ```
+   cd control/backend && python -m venv .venv && source .venv/bin/activate \
+     && pip install -r requirements.txt && uvicorn main:app --reload
+   cd control/frontend && npm install && npm run dev
+   ```
+   or, without installing Node locally:
+   ```
+   docker compose --profile dev up control-frontend-dev
+   ```
+
+## Documentation
+
+- [`CLAUDE.md`](CLAUDE.md) — project conventions, setup, and common
+  commands (in Spanish, the project's working language).
+- [`spec/`](spec/) — full specification: ingestion jobs, database
+  schema, and control panel modules.
+
+## Status
+
+Early stage / work in progress. The station inventory ingestion job
+and the control panel's authentication and stations modules are
+implemented; further ingestion jobs (e.g. daily climatological
+values) and control panel modules are planned.
