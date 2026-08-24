@@ -108,6 +108,60 @@ change.
   previous version), not an entity with its own identity, so it uses
   an auto-numbered `id` per the criteria in `spec/db/general.md`.
 
+## Table `config_values`
+
+Generic key-value store for operational configuration used across the
+project's processes (e.g. the ingest job worker's polling interval,
+see `spec/ingest/`). Editable from the control panel's config module
+(see [`spec/control/module/config.md`](../control/module/config.md)),
+but **not** a panel-specific table (no `control_` prefix): it's also
+read directly by processes outside `control/`, such as the future
+ingest job worker, so it's treated as a business table like `stations`,
+per the naming criteria in `spec/control/core.md`.
+
+Natural key: `key`.
+
+| Column        | Type        | Null | Description                                                        |
+|---------------|-------------|------|----------------------------------------------------------------------|
+| `key`         | `varchar`   | No   | Config key (primary key). E.g. `poll_interval_seconds`.              |
+| `value`       | `varchar`   | No   | Config value, stored as raw text; each consumer parses it to the type it expects (integer, boolean, etc.). |
+| `description` | `varchar`   | No   | Human-readable explanation of what the key controls, shown in the panel. |
+| `updated_at`  | `timestamp` | No   | Date/time of the last edit.                                          |
+
+### Design notes
+
+- **No `created_at`**: unlike tables fed by an ingestion process, rows
+  here aren't created through normal app usage — they only exist
+  because a migration seeded them (see "Seed data" below), and the
+  panel only allows editing their `value` (see
+  `spec/control/module/config.md`: no add/delete from the UI). A
+  creation timestamp wouldn't carry meaningful information beyond "when
+  this migration ran", so it's left out.
+- **`value` always `varchar`**: keeping the column type generic avoids
+  a schema change every time a new config key with a different
+  underlying type is added; type conversion/validation is the
+  responsibility of whichever code reads a given key.
+- **Keys are code-defined, not free-form**: the set of valid keys is
+  implicitly defined by whichever part of the codebase reads them (e.g.
+  the future ingest worker reading `poll_interval_seconds`). The panel
+  doesn't allow creating or deleting keys — only migrations do — to
+  avoid orphaned keys nothing reads, or missing keys some process
+  expects.
+
+### Seed data
+
+- Each config key is inserted by its own migration at the point some
+  part of the codebase starts needing it (same pattern as the
+  `control_users` admin seed in `spec/db/tables.md`), rather than all
+  being seeded up front. The first key, `poll_interval_seconds`, will
+  be seeded when the ingest job worker is implemented.
+
+### Pending decisions
+
+- Per-key value validation (e.g. `poll_interval_seconds` must be a
+  positive integer) — to be decided as each key is added, documented
+  in the spec of whichever module/process introduces it.
+
 ## Table `control_users`
 
 Access accounts for the control panel, with the `control_` prefix

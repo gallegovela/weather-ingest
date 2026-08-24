@@ -28,7 +28,10 @@ command line or access the database directly.
   own operation (e.g. access users) is created in that same database
   with the **`control_`** prefix (e.g. `control_users`), to
   distinguish them at a glance from business tables (`stations`,
-  future `climatological_values`, etc.). They're managed the same way
+  future `climatological_values`, `config_values`, etc. — including
+  tables the panel edits but doesn't exclusively own, like
+  `config_values`, also read by processes outside `control/`). They're
+  managed the same way
   through `db/` migrations, with the same workflow as the rest of the
   tables (see [`spec/db/general.md`](../db/general.md)); it's the only
   exception to that document's "no technical prefixes" convention, and
@@ -40,11 +43,13 @@ command line or access the database directly.
   scripts or `db/`'s schema management, which remain independent (see
   `spec/db/general.md`).
 - **Scope:** for now the core (modular architecture, layers,
-  authentication, stack, deployment) and two modules are specified —
-  `security` (login and user management) and `stations` (listing and
-  map, the reference module). The rest of the panel's functionality
-  (e.g. launching imports, viewing climatological value history) will
-  be added as new, independent modules.
+  authentication, stack, deployment) and three modules are specified —
+  `security` (login and user management), `stations` (listing and
+  map, the reference module) and `config` (editing operational
+  key-value settings used across the project's processes). The rest of
+  the panel's functionality (e.g. launching imports, viewing
+  climatological value history) will be added as new, independent
+  modules.
 
 ## Modular architecture
 
@@ -58,6 +63,7 @@ spec/control/
 └── module/
     ├── security.md      # Login, user management (see Security section)
     ├── stations.md      # Station listing + map (first functional module)
+    ├── config.md         # Edit operational key-value settings
     └── ...
 ```
 
