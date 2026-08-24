@@ -434,13 +434,22 @@ not by an ingestion process.
 
 - **Default admin user**: migration
   `db/migrations/versions/20260824_1200_cbdb178fe390_seed_control_admin_user.py`
-  inserts a default user (`admin@weather.local` / password `admin`,
-  stored as an Argon2id hash like any other user) so there's always a
-  way to log into the control panel after rebuilding the database
-  from scratch — there's no self-service signup, and creating a user
-  through the API requires already being logged in (see
-  `spec/control/module/security.md`). Change this password after
-  first login in a real environment.
+  inserts a default user (login `info@gallegovela.es` / password
+  `admin`, stored as an Argon2id hash like any other user) so there's
+  always a way to log into the control panel after rebuilding the
+  database from scratch — there's no self-service signup, and creating
+  a user through the API requires already being logged in (see
+  `spec/control/module/security.md`). Change this password after first
+  login in a real environment.
+  - **Login corrected by a later migration**,
+    `update_admin_user_login`: the original seed used
+    `admin@weather.local`, which `pydantic`'s `EmailStr` rejects
+    outright (`.local` is a reserved TLD by RFC — a syntax rule the
+    login form's own validation enforces, not a network/deliverability
+    check) — the seeded admin could never actually authenticate
+    through the real API, only exist as a row in the database. Found
+    by actually logging in through the API while testing the jobs
+    module, not just checking the database.
 
 ### Pending decisions
 
