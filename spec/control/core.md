@@ -362,9 +362,17 @@ forma uniforme.
   servicio `postgres` ya definido.
 - **Servidor de producción — decidido:** ya existe un **nginx**
   montado en el servidor de destino, gestionado **fuera de este
-  proyecto**. Los ajustes necesarios en ese nginx (proxy hacia los
-  contenedores `control/backend/` y `control/frontend/`, dominio,
-  TLS, etc.) son configuración externa a esta app y no se documentan
-  aquí. Dentro del alcance de este proyecto solo entra levantar los
+  proyecto**. Los ajustes necesarios en ese nginx (dominio, TLS, etc.)
+  son configuración externa a esta app y no se documentan aquí.
+  Dentro del alcance de este proyecto solo entra levantar los
   contenedores; el enrutado externo hacia ellos es responsabilidad
   aparte.
+- **El propio contenedor `control-frontend` ya hace de proxy de
+  `/api`** hacia `control-backend` (ver `control/frontend/nginx.conf`),
+  resolviendo el nombre de servicio por la red de docker-compose. Esto
+  hace que el stack funcione de forma autónoma con `docker compose up`
+  en local (sin depender del nginx externo del servidor de destino) y
+  también sirve en producción: el nginx externo puede seguir enrutando
+  `/api` directamente a `control-backend`, o simplemente reenviar todo
+  el tráfico a `control-frontend` y dejar que este proxy interno
+  resuelva `/api`.

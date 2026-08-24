@@ -37,7 +37,31 @@ services:
     depends_on:
       - control-backend
     ports:
-      - "8080:80"
+      - "8083:80"
+
+  # Servidor de desarrollo de Vite en contenedor: alternativa a instalar
+  # node en local para trabajar en control/frontend/ (ver
+  # control/frontend/README.md). No arranca con `docker compose up` porque
+  # está en el perfil "dev": hay que pedirlo explícitamente con
+  # `docker compose --profile dev up control-frontend-dev`.
+  control-frontend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --port 5173"
+    environment:
+      # Dentro de la red de docker-compose, control-backend se resuelve
+      # por nombre de servicio en vez de localhost (ver vite.config.js).
+      VITE_PROXY_TARGET: http://control-backend:8000
+    depends_on:
+      - control-backend
+    volumes:
+      - ./control/frontend:/app
+      - control_frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    profiles:
+      - dev
 
 volumes:
   postgres_data:
+  control_frontend_node_modules:

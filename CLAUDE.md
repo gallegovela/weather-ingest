@@ -113,7 +113,11 @@ módulo `estaciones` (ver `spec/control/core.md`).
   `control/backend/` activado).
 - `cd control/frontend && npm run dev` — arrancar la SPA del panel de
   control en desarrollo (necesita el backend arrancado en paralelo,
-  ver `control/frontend/README.md`).
+  ver `control/frontend/README.md`). Alternativa sin node local:
+  `docker compose --profile dev up control-frontend-dev`.
+- `docker compose build control-frontend` — construir la imagen de
+  producción del frontend (build de Vite + nginx) sin necesitar node
+  en local.
 
 ## Convenciones de código
 

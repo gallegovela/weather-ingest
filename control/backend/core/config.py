@@ -10,8 +10,18 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-load_dotenv(PROJECT_ROOT / ".env")
+try:
+    # En desarrollo local (venv), config.py vive en
+    # control/backend/core/ dentro del repo completo, así que subir 3
+    # niveles llega a la raíz del proyecto donde está el .env.
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+    load_dotenv(PROJECT_ROOT / ".env")
+except IndexError:
+    # En el contenedor Docker solo se copia control/backend/ (ver
+    # Dockerfile), así que esa profundidad de directorios no existe.
+    # No pasa nada: docker-compose.yml ya inyecta las variables de
+    # entorno directamente, no hace falta leer un .env.
+    pass
 
 
 def _require_env(name: str) -> str:
