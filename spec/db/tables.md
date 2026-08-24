@@ -212,7 +212,7 @@ Natural key: `key`.
 |---------------|-------------|------|----------------------------------------------------------------------|
 | `key`         | `varchar`   | No   | Config key (primary key), `UPPER_SNAKE_CASE`. E.g. `POLL_INTERVAL_SECONDS`. |
 | `value`       | `varchar`   | No   | Config value, stored as raw text; each consumer parses it to the type it expects. |
-| `value_type`  | `varchar`   | No   | One of `string`, `positive_integer` (see "Design notes") — governs how the panel validates an edit to `value`. |
+| `value_type`  | `varchar`   | No   | One of `string`, `secret`, `positive_integer` (see "Design notes") — governs how the panel validates an edit to `value`, and whether it's masked on read. |
 | `description` | `varchar`   | No   | Human-readable explanation of what the key controls, shown in the panel. |
 | `updated_at`  | `timestamp` | No   | Date/time of the last edit.                                          |
 
@@ -233,7 +233,15 @@ Natural key: `key`.
   resolves the earlier open question of whether/how to validate a
   key's new value before saving it (see `spec/control/module/config.md`).
   Covers the types actually in use today:
-  - **`string`**: non-empty after trimming. Used by `AEMET_API_KEY`.
+  - **`string`**: non-empty after trimming.
+  - **`secret`**: same validation as `string`, but the control panel's
+    `GET /api/config/values` masks the value instead of returning it in
+    plain text (a fixed placeholder, not derived from the real value's
+    length) — see `spec/control/module/config.md`. Added after
+    `AEMET_API_KEY` was returned in plain text by the config endpoint
+    during development and got exposed in a terminal session; `string`
+    alone didn't distinguish "safe to display" from "a credential".
+    Used by `AEMET_API_KEY`.
   - **`positive_integer`**: parses as an integer, and is `> 0`. Used by
     `POLL_INTERVAL_SECONDS` and `SCHEDULER_MAX_DATE_RANGE`.
   Like `job_type`/`status` on `ingest_jobs`, `value_type` isn't
@@ -263,17 +271,18 @@ Natural key: `key`.
   part of the codebase starts needing it (same pattern as the
   `control_users` admin seed in `spec/db/tables.md`), rather than all
   being seeded up front.
-- **`AEMET_API_KEY`** (`value_type: string`) — the first key seeded
+- **`AEMET_API_KEY`** (`value_type: secret`) — the first key seeded
   (migrations `create_config_values` and
-  `seed_config_value_aemet_api_key`): AEMET OpenData's `api_key`,
-  previously an `AEMET_API_KEY` variable in `.env`, now read here by
-  `ingest/` (see `ingest/db.py`'s `get_config_value`, used by
-  `ingest/aemet_client.py`) instead. Unlike other keys, this one is a
-  **secret**, so the migration seeds a placeholder value (`CHANGE_ME`),
-  not the real key — the real value is set with a direct `UPDATE`
-  against the running database, never committed. `.env`'s
-  `AEMET_API_KEY` isn't read by any code anymore, but hasn't been
-  removed from `.env` yet.
+  `seed_config_value_aemet_api_key`; `value_type` started as `string`
+  and was changed to `secret` by a later migration,
+  `mark_aemet_api_key_as_secret`, once the masking behavior existed):
+  AEMET OpenData's `api_key`, previously an `AEMET_API_KEY` variable in
+  `.env`, now read here by `ingest/` (see `ingest/db.py`'s
+  `get_config_value`, used by `ingest/aemet_client.py`) instead. The
+  seed migration inserts a placeholder value (`CHANGE_ME`), not the
+  real key — the real value is set with a direct `UPDATE` against the
+  running database, never committed. `.env`'s `AEMET_API_KEY` isn't
+  read by any code anymore, but hasn't been removed from `.env` yet.
 - **`POLL_INTERVAL_SECONDS`** (`value_type: positive_integer`) — `300`
   (5 minutes). Seconds the job worker sleeps between poll iterations
   when there's nothing pending (see `spec/ingest/general.md`).

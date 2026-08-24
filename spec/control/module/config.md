@@ -28,6 +28,14 @@ structure" in `core.md`), with a single subitem:
   is small (a handful), so the shared "paginated listings with
   filters" convention (`core.md`, "REST API contract") doesn't apply
   here: the endpoint returns the full list in one call.
+- **`secret`-typed values are masked, never shown — decided.** For a
+  row whose `value_type` is `secret` (e.g. `AEMET_API_KEY`), both the
+  list and the edit form display a fixed placeholder instead of the
+  real value — the backend never sends it (see "Data" below). Added
+  after the real value was returned in plain text by this endpoint
+  during development and got exposed. Editing still works: the edit
+  form's value field starts empty (not pre-filled with the mask) and
+  submits whatever the user types, same as any other key.
 - **Edit only:** each row has an **Edit** action that opens a form
   with just the `value` field (`key` and `description` are read-only).
   There's no **add** or **delete** action — decided in "Objective"
@@ -42,9 +50,13 @@ Follows the layered architecture in `core.md`:
 - **Service** (`service.py`): validates that the key being edited
   exists (`404` otherwise), then validates the new value against that
   row's `value_type` (see `spec/db/tables.md`, table `config_values`:
-  `string` = non-empty, `positive_integer` = parses as an int `> 0`),
-  rejecting with `400` if it doesn't match.
-- **Control** (`router.py`): exposes the endpoints.
+  `string`/`secret` = non-empty, `positive_integer` = parses as an int
+  `> 0`), rejecting with `400` if it doesn't match.
+- **Control** (`router.py`): exposes the endpoints, and is where the
+  `secret` masking happens — it builds the response DTO with a fixed
+  placeholder instead of the DAO row's real `value` whenever
+  `value_type == "secret"`, for both `GET` and the echoed result of a
+  `PUT`.
 
 ### Endpoints (REST API)
 
