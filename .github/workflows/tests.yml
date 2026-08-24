@@ -1,0 +1,31 @@
+name: Tests
+
+# Runs on every push (any branch) and every pull request, unconditionally
+# -- no path filter, so a change anywhere (not just in the tests
+# themselves) that breaks a test still gets caught (spec/testing.md).
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ingest-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ingest/requirements.txt
+      - run: pytest ingest/tests/
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r control/backend/requirements.txt
+      - run: pytest tests/
+        working-directory: control/backend

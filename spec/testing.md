@@ -65,10 +65,31 @@ concurrent claims racing for the same `pending` row), ahead of the
 - **Naming:** `test_<module>.py`, mirroring the file under test (e.g.
   `ingest/tests/test_stations.py` for `ingest/stations.py`).
 
+## Continuous integration — decided: GitHub Actions, one job per module
+
+- `.github/workflows/tests.yml` runs on **every push (any branch) and
+  every pull request, unconditionally** — no path filter. A change
+  that isn't in a test file can still break one (e.g. editing
+  `ingest/stations.py` without touching `ingest/tests/`), so scoping
+  the trigger to test-file changes would miss exactly the regressions
+  this exists to catch.
+- **One job per module**, mirroring "one suite per module" above:
+  `ingest-tests` installs `ingest/requirements.txt` and runs `pytest
+  ingest/tests/`; `backend-tests` installs
+  `control/backend/requirements.txt` and runs `pytest tests/` with
+  `control/backend/` as the working directory (needed for its
+  `modules.*`-style imports to resolve, same as running it locally).
+  Each job only installs its own module's dependencies, same
+  independence criterion as everywhere else in the project.
+- **No database service needed**: every current test is a unit test
+  with no real Postgres involved (mocked/monkeypatched DAOs, pure
+  transform functions — see "Scope" above), so the workflow doesn't
+  need a `services:` Postgres container. Revisit once the job worker's
+  claim-logic integration test (see "Known exception" above) exists.
+
 ## Pending decisions
 
 - Whether/when to add integration tests beyond the job worker's claim
   logic exception above (DAO layers, FastAPI `TestClient`, frontend
-  component tests).
-- Whether a CI pipeline is ever needed to run tests automatically —
-  none exists today; tests are run locally by hand.
+  component tests) — once they exist, the CI workflow will need a
+  Postgres service container to run them.
