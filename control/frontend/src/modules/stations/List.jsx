@@ -33,8 +33,8 @@ function StationRow({ station, visibleColumns, hiddenColumns }) {
       </Table.Tr>
       {hiddenColumns.length > 0 && (
         <Table.Tr>
-          <Table.Td colSpan={ALWAYS_VISIBLE_FIELDS.length + 1} p={0}>
-            <Collapse in={expanded}>
+          <Table.Td colSpan={ALWAYS_VISIBLE_FIELDS.length + 1 + visibleColumns.length} p={0}>
+            <Collapse expanded={expanded}>
               <Box p="sm" bg="gray.0">
                 <Grid>
                   {hiddenColumns.map((field) => (

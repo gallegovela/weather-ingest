@@ -6,6 +6,11 @@ import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
+// Cluster icon styles (the colored circle + count) -- without these,
+// clusters render as bare unstyled numbers. Not pulled in by
+// react-leaflet-cluster or leaflet/dist/leaflet.css automatically.
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 
 import { STATION_FIELDS, formatValue } from "./columns";
 import { listStations } from "./stationsApi";
@@ -46,7 +51,11 @@ export function Map() {
               key={station.station_code}
               position={[Number(station.latitude_decimal), Number(station.longitude_decimal)]}
             >
-              <Popup>
+              {/* autoPan disabled: on mobile, the pan it triggers can land the
+                  marker back inside a cluster's recompute radius, which makes
+                  MarkerClusterGroup re-render it away and the popup closes
+                  itself right after opening. */}
+              <Popup autoPan={false}>
                 <Table>
                   <Table.Tbody>
                     {STATION_FIELDS.map((field) => (
