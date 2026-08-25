@@ -5,6 +5,7 @@ import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { listClimatologicalValues } from "../climatological_values/climatologicalValuesApi";
 import { listConfigValues } from "../config/configApi";
 import { listStations } from "../stations/stationsApi";
 import { JobHistoryList } from "./JobHistoryList";
@@ -95,10 +96,7 @@ export function DailyValues() {
     onError: (error) => notifications.show({ color: "red", message: error.message }),
   });
 
-  function submit(values) {
-    const days =
-      Math.floor((new Date(values.date_to) - new Date(values.date_from)) / (1000 * 60 * 60 * 24)) + 1;
-
+  function queueOrSplit(values, days) {
     if (days <= maxDateRange) {
       queueOne.mutate({
         station_code: values.station_code,
@@ -115,6 +113,44 @@ export function DailyValues() {
         + `¿Quieres partirlo en ${windows.length} planificaciones, o prefieres redefinir el rango?`,
       labels: { confirm: `Partir en ${windows.length} planificaciones`, cancel: "Redefinir rango" },
       onConfirm: () => queueSplit.mutate(windows),
+    });
+  }
+
+  // Overlap check (spec/control/module/jobs.md, "Overlap warning"):
+  // purely informational, checked before the range-length check above,
+  // reusing climatological_values' own listing instead of a new
+  // endpoint. If the check itself fails (e.g. a network hiccup), fails
+  // open -- proceeds as if there were no overlap, rather than blocking
+  // a legitimate import over an unrelated problem.
+  async function submit(values) {
+    const days =
+      Math.floor((new Date(values.date_to) - new Date(values.date_from)) / (1000 * 60 * 60 * 24)) + 1;
+
+    let overlapCount = 0;
+    try {
+      const overlap = await listClimatologicalValues({
+        station_code: values.station_code,
+        date_from: values.date_from,
+        date_to: values.date_to,
+        page_size: 1,
+      });
+      overlapCount = overlap.total;
+    } catch {
+      // fail open, see comment above
+    }
+
+    if (overlapCount === 0) {
+      queueOrSplit(values, days);
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: "Ya hay valores importados en este rango",
+      children:
+        `${overlapCount} día${overlapCount === 1 ? "" : "s"} del rango elegido ya tienen valores importados `
+        + "para esta estación; se sobrescribirán con los nuevos datos, no se duplicarán. ¿Continuar?",
+      labels: { confirm: "Continuar", cancel: "Cancelar" },
+      onConfirm: () => queueOrSplit(values, days),
     });
   }
 

@@ -17,7 +17,36 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r ingest/requirements.txt
-      - run: pytest ingest/tests/
+      - run: pytest ingest/tests/ --ignore=ingest/tests/integration
+
+  # Separate from ingest-tests (spec/testing.md, "Continuous integration"):
+  # needs a real Postgres, kept out of the fast DB-free unit job.
+  ingest-integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: weather
+          POSTGRES_PASSWORD: weather
+          POSTGRES_DB: weather
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://weather:weather@localhost:5432/weather
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r db/requirements.txt -r ingest/requirements.txt
+      - run: python db/migrate.py upgrade
+      - run: pytest ingest/tests/integration/
 
   backend-tests:
     runs-on: ubuntu-latest
