@@ -43,13 +43,14 @@ command line or access the database directly.
   scripts or `db/`'s schema management, which remain independent (see
   `spec/db/general.md`).
 - **Scope:** for now the core (modular architecture, layers,
-  authentication, stack, deployment) and four modules are specified —
+  authentication, stack, deployment) and five modules are specified —
   `security` (login and user management), `stations` (listing and
   map, the reference module), `config` (editing operational
-  key-value settings used across the project's processes) and `jobs`
-  (queuing ingestion runs, panel label "Planificador"). The rest of
-  the panel's functionality (e.g. viewing climatological value
-  history) will be added as new, independent modules.
+  key-value settings used across the project's processes), `jobs`
+  (queuing ingestion runs, panel label "Planificador") and
+  `climatological_values` (browsing imported daily values, panel
+  label "Valores Diarios"). The rest of the panel's functionality
+  will be added as new, independent modules.
 
 ## Modular architecture
 
@@ -65,6 +66,7 @@ spec/control/
     ├── stations.md      # Station listing + map (first functional module)
     ├── config.md         # Edit operational key-value settings
     ├── jobs.md            # Queue ingestion runs ("Planificador" in the UI)
+    ├── climatological_values.md  # Browse imported daily values ("Valores Diarios")
     └── ...
 ```
 
@@ -219,11 +221,29 @@ control/frontend/src/
 
 Basic web layout, common to every panel screen once logged in:
 
-- **Left column:** navigation menu, fixed, organized by **modules**.
-  Each module appears as a top-level menu group/entry, with its own
-  subitems (the different screens/views that module defines in its
-  `spec/control/module/<module>.md` file). The correspondence is
-  direct: one spec module = one menu entry with its subitems.
+- **Left column:** navigation menu, fixed, organized by **sections**.
+  Most sections correspond directly to a single module (one spec
+  module = one top-level menu entry with its subitems, the different
+  screens/views that module defines in its
+  `spec/control/module/<module>.md` file).
+  - **A section can also group the screens of several modules under a
+    shared label plus an intermediate sub-heading — decided.** First
+    used for "Datos ingestados" ("Ingested data"): it groups
+    `stations`'s List/Map and `climatological_values`'s listing under
+    an "AEMET" sub-heading, since AEMET is currently the project's
+    only ingestion data source but doesn't have to stay the only one
+    — a future source would get its own sub-heading in the same
+    top-level section instead of a whole new top-level entry, and the
+    top-level menu doesn't grow one entry per data-viewing module.
+    Which section (and, if grouped, which sub-heading) a module's
+    screens belong to is decided per module and documented in that
+    module's own `spec/control/module/<module>.md` file ("Menu"
+    section), not here — this document only establishes that grouping
+    is possible and why.
+  - The **route structure doesn't mirror the menu's nesting**: URLs
+    stay flat per module (e.g. `/stations/list`), regardless of how
+    deep that module's entry sits in the menu. Nesting is a menu
+    presentation concern only.
 - **Rest of the screen (right):** main content area, where the
   selected subitem's screen is rendered.
 
