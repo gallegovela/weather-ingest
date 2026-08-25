@@ -97,6 +97,24 @@ subitem/screen here.
     visible individually in the history list below.
   - **Redefine the range**: closes the warning without queuing
     anything, so the user can edit the dates.
+- **Overlap warning — decided.** Before queuing (checked first, ahead
+  of the range-length check above), the screen asks
+  [`climatological_values`](./climatological_values.md)'s own listing
+  endpoint how many days in `[date_from, date_to]` already have a
+  value imported for that station (`GET
+  /api/climatological-values/values?station_code=...&date_from=...
+  &date_to=...&page_size=1`, reading `total` — no new backend endpoint,
+  same "reuse an existing listing for a pre-flight check" pattern
+  already used for the station picker). If `total > 0`, a confirmation
+  dialog states how many days overlap and that they'll be
+  **overwritten with the new import**, not duplicated (the upsert
+  guarantees that — see `spec/ingest/DAILY_VALUES.md`, "Load
+  strategy") — **Continue** proceeds to the range-length check and
+  queuing as normal, **Cancel** returns to the form without queuing
+  anything. Purely informational, not a hard block: overlapping is a
+  legitimate, safe way to refresh a range (e.g. to pick up an AEMET
+  correction), so nothing here prevents it — it only makes sure the
+  user isn't surprised that it happened.
 - Same **history list** pattern as the Stations screen, filtered to
   `job_type = 'daily_values'`, plus a filter by `station_code`, the
   same per-row **Cancel** action on `pending` jobs (see "Cancelling a

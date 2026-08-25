@@ -134,7 +134,11 @@ Notes:
 - **Upsert** by (`station_code`, `date`): if the row already exists
   (e.g. re-importing an overlapping range) it's overwritten; if not,
   it's inserted. No change-history table — see `spec/db/tables.md`,
-  "Design notes".
+  "Design notes". Never duplicated: guaranteed by the table's
+  composite primary key (`station_code`, `date`) plus `ON CONFLICT
+  (station_code, date) DO UPDATE`, covered by an integration test (see
+  `spec/testing.md`, "Known exceptions") rather than trusted on
+  reading alone.
 - The first time a row was inserted and the last time it was updated
   are recorded (`created_at`/`updated_at`, see `spec/db/tables.md`).
 

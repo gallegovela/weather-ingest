@@ -41,14 +41,29 @@ already applied when rejecting APScheduler/Celery for the job worker
 need. Revisit once integration-level bugs actually show up, or the
 codebase grows enough to justify the setup cost.
 
-## Known exception: the job worker's claim logic
+## Known exceptions: database-dependent correctness
 
-`FOR UPDATE SKIP LOCKED` job claiming (`spec/ingest/general.md`) is
-concurrency logic that's hard to fully trust by reading the code
-alone. Once the job worker is implemented, this is a good candidate
-for an early **integration** test against a real Postgres (two
-concurrent claims racing for the same `pending` row), ahead of the
-"unit tests only for now" scope above — the one deliberate exception.
+Some behavior is hard to fully trust by reading the code alone — it
+only really holds if the database enforces it. These are integration
+tests (a real Postgres, not mocked), the deliberate exceptions to
+"unit tests only for now" above:
+
+- **The job worker's claim logic** (`spec/ingest/general.md`):
+  `FOR UPDATE SKIP LOCKED` job claiming — a candidate for a test with
+  two concurrent claims racing for the same `pending` row.
+- **`climatological_values` upsert idempotency on overlapping imports**
+  (`spec/ingest/DAILY_VALUES.md`, "Load strategy"): re-importing a date
+  range that overlaps already-stored rows must **update** them, never
+  insert a duplicate. This is structurally guaranteed by the table's
+  composite primary key (`station_code`, `date`) plus
+  `UPSERT_SQL`'s `ON CONFLICT (station_code, date) DO UPDATE` — but
+  "structurally guaranteed by a constraint plus a query" is exactly the
+  kind of claim that's worth a real test against a real constraint,
+  not just a reading of the SQL. See
+  `ingest/tests/integration/test_daily_values.py`: inserts a row via
+  `UPSERT_SQL`, upserts the same `(station_code, date)` again with
+  different values, asserts exactly one row exists with the new
+  values.
 
 ## Tooling and layout — decided: pytest, one suite per module
 
@@ -64,6 +79,13 @@ concurrent claims racing for the same `pending` row), ahead of the
   `requirements.txt`.
 - **Naming:** `test_<module>.py`, mirroring the file under test (e.g.
   `ingest/tests/test_stations.py` for `ingest/stations.py`).
+- **Integration tests live in `<module>/tests/integration/` — decided.**
+  Separated from the DB-free unit tests (previous bullet) so CI can
+  run each group with the infrastructure it actually needs — a plain
+  `pytest <module>/tests/` for the fast/no-DB job, a targeted
+  `pytest <module>/tests/integration/` for the job with a Postgres
+  service (see "Continuous integration" below) — instead of one mixed
+  suite where every run pays for the slowest test's setup.
 
 ## Continuous integration — decided: GitHub Actions, one job per module
 
@@ -73,23 +95,32 @@ concurrent claims racing for the same `pending` row), ahead of the
   `ingest/stations.py` without touching `ingest/tests/`), so scoping
   the trigger to test-file changes would miss exactly the regressions
   this exists to catch.
-- **One job per module**, mirroring "one suite per module" above:
-  `ingest-tests` installs `ingest/requirements.txt` and runs `pytest
-  ingest/tests/`; `backend-tests` installs
-  `control/backend/requirements.txt` and runs `pytest tests/` with
-  `control/backend/` as the working directory (needed for its
-  `modules.*`-style imports to resolve, same as running it locally).
-  Each job only installs its own module's dependencies, same
-  independence criterion as everywhere else in the project.
-- **No database service needed**: every current test is a unit test
-  with no real Postgres involved (mocked/monkeypatched DAOs, pure
-  transform functions — see "Scope" above), so the workflow doesn't
-  need a `services:` Postgres container. Revisit once the job worker's
-  claim-logic integration test (see "Known exception" above) exists.
+- **One job per module for unit tests**, mirroring "one suite per
+  module" above: `ingest-tests` installs `ingest/requirements.txt` and
+  runs `pytest ingest/tests/ --ignore=ingest/tests/integration`;
+  `backend-tests` installs `control/backend/requirements.txt` and runs
+  `pytest tests/` with `control/backend/` as the working directory
+  (needed for its `modules.*`-style imports to resolve, same as
+  running it locally). Each job only installs its own module's
+  dependencies, same independence criterion as everywhere else in the
+  project. No `services:` Postgres container here — these stay
+  DB-free, mocked/monkeypatched DAOs and pure transform functions (see
+  "Scope" above).
+- **A separate job per module for integration tests, with a Postgres
+  service — decided.** `ingest-integration-tests`: brings up a
+  `postgres:16` service (same image as `docker-compose.yml`), installs
+  `db/requirements.txt` + `ingest/requirements.txt`, runs `python
+  db/migrate.py upgrade` against it (so `stations`/`climatological_values`
+  exist — same schema-build path as everywhere else, no hand-written
+  test schema), then `pytest ingest/tests/integration/`. Kept separate
+  from `ingest-tests` so the fast unit job doesn't pay for Postgres
+  startup, and so a Postgres outage/flake in CI doesn't fail the
+  unit-test signal.
 
 ## Pending decisions
 
-- Whether/when to add integration tests beyond the job worker's claim
-  logic exception above (DAO layers, FastAPI `TestClient`, frontend
-  component tests) — once they exist, the CI workflow will need a
-  Postgres service container to run them.
+- Whether/when to add integration tests beyond the two "Known
+  exceptions" above (DAO layers, FastAPI `TestClient`, frontend
+  component tests) — each would need its own module's CI job extended
+  with a Postgres service the same way `ingest-integration-tests` now
+  is.
