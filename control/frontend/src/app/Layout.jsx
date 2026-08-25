@@ -34,7 +34,7 @@ const MODULES = [
 ];
 
 export function Layout() {
-  const [opened, { toggle }] = useDisclosure();
+  const [opened, { toggle, close }] = useDisclosure();
   const session = useCurrentSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -74,7 +74,13 @@ export function Layout() {
         {MODULES.map((navModule) => (
           <NavLink key={navModule.label} label={navModule.label} defaultOpened childrenOffset={20}>
             {navModule.items.map((item) => (
-              <NavLink key={item.to} label={item.label} component={RouterNavLink} to={item.to} />
+              <NavLink
+                key={item.to}
+                label={item.label}
+                component={RouterNavLink}
+                to={item.to}
+                onClick={close}
+              />
             ))}
           </NavLink>
         ))}

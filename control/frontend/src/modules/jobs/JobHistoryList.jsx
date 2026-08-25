@@ -32,13 +32,15 @@ export function JobHistoryList({ queryKey, listFn, cancelFn, deleteFn, showStati
   const [createdAtTo, setCreatedAtTo] = useState(null);
   const [selected, setSelected] = useState([]);
 
+  // Mantine's DateInput (v9) already hands back "YYYY-MM-DD" strings,
+  // usable as query params as-is -- no .toISOString() conversion needed.
   const filters = {
     page,
     page_size: PAGE_SIZE,
     status,
     ...(showStationColumn ? { station_code: stationCode } : {}),
-    created_at_from: createdAtFrom?.toISOString().slice(0, 10),
-    created_at_to: createdAtTo?.toISOString().slice(0, 10),
+    created_at_from: createdAtFrom,
+    created_at_to: createdAtTo,
   };
 
   const { data, isLoading, isError } = useQuery({

@@ -22,12 +22,14 @@ export function UsersList() {
   const [createdAtTo, setCreatedAtTo] = useState(null);
   const [form, setForm] = useState(null); // null closed, {} create, user edit
 
+  // Mantine's DateInput (v9) already hands back "YYYY-MM-DD" strings,
+  // usable as query params as-is -- no .toISOString() conversion needed.
   const filters = {
     page,
     page_size: PAGE_SIZE,
     login,
-    created_at_from: createdAtFrom?.toISOString().slice(0, 10),
-    created_at_to: createdAtTo?.toISOString().slice(0, 10),
+    created_at_from: createdAtFrom,
+    created_at_to: createdAtTo,
   };
 
   const { data, isLoading, isError } = useQuery({

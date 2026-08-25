@@ -16,11 +16,18 @@ const QUERY_KEY = ["jobs", "daily_values"];
 // ~921 rows isn't a volume that justifies paginating a picker.
 const STATIONS_PAGE_SIZE = 2000;
 
-const ISO_DATE = (date) => date?.toISOString().slice(0, 10);
+// Mantine's DateInput (v9) hands back a "YYYY-MM-DD" string, not a
+// Date -- form.values.date_from/date_to are already strings, usable
+// as-is for the API and for string comparison (date_to's validator
+// below), but need parsing to Date for arithmetic (day counts,
+// splitRange).
+function formatISODate(date) {
+  return date.toISOString().slice(0, 10);
+}
 
-// Splits [dateFrom, dateTo] into consecutive windows of at most
-// maxDays each (spec/control/module/jobs.md, "Splitting a too-large
-// range").
+// Splits [dateFrom, dateTo] (ISO date strings) into consecutive
+// windows of at most maxDays each (spec/control/module/jobs.md,
+// "Splitting a too-large range"), as Date objects.
 function splitRange(dateFrom, dateTo, maxDays) {
   const windows = [];
   let start = new Date(dateFrom);
@@ -77,7 +84,11 @@ export function DailyValues() {
     mutationFn: (windows) =>
       Promise.all(
         windows.map(([from, to]) =>
-          createDailyValuesJob({ station_code: form.values.station_code, date_from: ISO_DATE(from), date_to: ISO_DATE(to) })
+          createDailyValuesJob({
+            station_code: form.values.station_code,
+            date_from: formatISODate(from),
+            date_to: formatISODate(to),
+          })
         )
       ),
     onSuccess: invalidate,
@@ -85,13 +96,14 @@ export function DailyValues() {
   });
 
   function submit(values) {
-    const days = Math.floor((values.date_to - values.date_from) / (1000 * 60 * 60 * 24)) + 1;
+    const days =
+      Math.floor((new Date(values.date_to) - new Date(values.date_from)) / (1000 * 60 * 60 * 24)) + 1;
 
     if (days <= maxDateRange) {
       queueOne.mutate({
         station_code: values.station_code,
-        date_from: ISO_DATE(values.date_from),
-        date_to: ISO_DATE(values.date_to),
+        date_from: values.date_from,
+        date_to: values.date_to,
       });
       return;
     }

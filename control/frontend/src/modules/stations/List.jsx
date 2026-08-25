@@ -10,7 +10,6 @@ import { listStations } from "./stationsApi";
 import { useVisibleColumns } from "./useVisibleColumns";
 
 const PAGE_SIZE = 20;
-const ISO_DATE = (date) => date?.toISOString().slice(0, 10);
 
 function StationRow({ station, visibleColumns, hiddenColumns }) {
   const [expanded, setExpanded] = useState(false);
@@ -73,13 +72,12 @@ export function List() {
     updated_at_from: null, updated_at_to: null,
   });
 
+  // Mantine's DateInput (v9) already hands back "YYYY-MM-DD" strings,
+  // usable as query params as-is -- no .toISOString() conversion needed.
   const filters = {
     ...textFilters,
     ...rangeFilters,
-    created_at_from: ISO_DATE(dates.created_at_from),
-    created_at_to: ISO_DATE(dates.created_at_to),
-    updated_at_from: ISO_DATE(dates.updated_at_from),
-    updated_at_to: ISO_DATE(dates.updated_at_to),
+    ...dates,
   };
   const [debouncedFilters] = useDebouncedValue(filters, 400);
 
