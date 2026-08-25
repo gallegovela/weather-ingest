@@ -1,13 +1,14 @@
-import { Alert, Box, Collapse, Grid, NumberInput, Table, Text, TextInput, Title, UnstyledButton } from "@mantine/core";
+import { Alert, Anchor, Box, Collapse, Grid, NumberInput, Table, Text, TextInput, Title, UnstyledButton } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { Pagination } from "../../app/Pagination";
+import { useVisibleColumns } from "../../app/useVisibleColumns";
 import { ALWAYS_VISIBLE_FIELDS, OPTIONAL_FIELDS, formatValue } from "./columns";
 import { listStations } from "./stationsApi";
-import { useVisibleColumns } from "./useVisibleColumns";
 
 const PAGE_SIZE = 20;
 
@@ -30,10 +31,19 @@ function StationRow({ station, visibleColumns, hiddenColumns }) {
         {visibleColumns.map((field) => (
           <Table.Td key={field.key}>{formatValue(field, station[field.key])}</Table.Td>
         ))}
+        <Table.Td>
+          <Anchor
+            component={Link}
+            to={`/climatological-values/values?station_code=${station.station_code}`}
+            size="sm"
+          >
+            Valores diarios
+          </Anchor>
+        </Table.Td>
       </Table.Tr>
       {hiddenColumns.length > 0 && (
         <Table.Tr>
-          <Table.Td colSpan={ALWAYS_VISIBLE_FIELDS.length + 1 + visibleColumns.length} p={0}>
+          <Table.Td colSpan={ALWAYS_VISIBLE_FIELDS.length + 2 + visibleColumns.length} p={0}>
             <Collapse expanded={expanded}>
               <Box p="sm" bg="gray.0">
                 <Grid>
@@ -170,6 +180,7 @@ export function List() {
               {visible.map((field) => (
                 <Table.Th key={field.key}>{field.label}</Table.Th>
               ))}
+              <Table.Th />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>

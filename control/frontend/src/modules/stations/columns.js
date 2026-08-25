@@ -14,6 +14,9 @@ export const STATION_FIELDS = [
   { key: "name", label: "Nombre", filterType: "text", priority: 0 },
   { key: "province", label: "Provincia", filterType: "text", priority: 0 },
   { key: "altitude", label: "Altitud (m)", filterType: "number_range", priority: 1 },
+  // Not filterable -- decided in spec/control/module/stations.md: it's a
+  // display convenience computed by the DAO, not a column on `stations`.
+  { key: "daily_values_count", label: "Valores diarios importados", priority: 1 },
   { key: "synoptic_code", label: "Ind. sinóptico", filterType: "text", priority: 2 },
   {
     key: "latitude_decimal",

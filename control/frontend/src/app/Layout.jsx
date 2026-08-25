@@ -6,14 +6,25 @@ import { NavLink as RouterNavLink, Outlet, useNavigate } from "react-router-dom"
 import { apiClient } from "./apiClient";
 import { useCurrentSession } from "./SessionContext";
 
-// Direct correspondence spec module -> menu entry with its subitems
-// (spec/control/core.md, "Application structure").
+// Correspondence spec module -> menu entry (spec/control/core.md,
+// "Application structure"): usually direct (one module = one entry
+// with its `items`), but an entry can also group several modules'
+// screens under `groups` of sub-headings -- decided for "Datos
+// ingestados", grouping `stations` and `climatological_values` under
+// an "AEMET" sub-heading (see spec/control/module/stations.md and
+// spec/control/module/climatological_values.md, "Menu").
 const MODULES = [
   {
-    label: "Estaciones",
-    items: [
-      { label: "Listado", to: "/stations/list" },
-      { label: "Mapa", to: "/stations/map" },
+    label: "Datos ingestados",
+    groups: [
+      {
+        label: "AEMET",
+        items: [
+          { label: "Listado", to: "/stations/list" },
+          { label: "Mapa", to: "/stations/map" },
+          { label: "Valores Diarios", to: "/climatological-values/values" },
+        ],
+      },
     ],
   },
   {
@@ -73,7 +84,7 @@ export function Layout() {
       <AppShell.Navbar p="md">
         {MODULES.map((navModule) => (
           <NavLink key={navModule.label} label={navModule.label} defaultOpened childrenOffset={20}>
-            {navModule.items.map((item) => (
+            {navModule.items?.map((item) => (
               <NavLink
                 key={item.to}
                 label={item.label}
@@ -81,6 +92,19 @@ export function Layout() {
                 to={item.to}
                 onClick={close}
               />
+            ))}
+            {navModule.groups?.map((group) => (
+              <NavLink key={group.label} label={group.label} defaultOpened childrenOffset={20}>
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    label={item.label}
+                    component={RouterNavLink}
+                    to={item.to}
+                    onClick={close}
+                  />
+                ))}
+              </NavLink>
             ))}
           </NavLink>
         ))}

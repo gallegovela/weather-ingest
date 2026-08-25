@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
-// Responsive columns with expandable row (spec/control/module/stations.md):
-// depending on available width, optional columns are hidden starting
-// with the lowest priority (from the end of OPTIONAL_FIELDS); the ones
-// that don't fit are available by expanding the row with the "+" control.
+// Responsive columns with expandable row, cross-cutting since more than
+// one module's listing uses it (first set by spec/control/module/stations.md,
+// reused by spec/control/module/climatological_values.md): depending on
+// available width, optional columns are hidden starting with the lowest
+// priority (from the end of the caller's optionalFields); the ones that
+// don't fit are available by expanding the row with the "+" control.
 const WIDTH_PER_OPTIONAL_COLUMN = 160;
-const RESERVED_WIDTH = 480; // station_code + name + province + actions
+const RESERVED_WIDTH = 480; // always-visible columns + actions
 
 export function useVisibleColumns(optionalFields) {
   const containerRef = useRef(null);

@@ -1,4 +1,4 @@
-import { Alert, Stack, Table, Title } from "@mantine/core";
+import { Alert, Anchor, Stack, Table, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
@@ -6,6 +6,7 @@ import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
+import { Link } from "react-router-dom";
 // Cluster icon styles (the colored circle + count) -- without these,
 // clusters render as bare unstyled numbers. Not pulled in by
 // react-leaflet-cluster or leaflet/dist/leaflet.css automatically.
@@ -66,6 +67,13 @@ export function Map() {
                     ))}
                   </Table.Tbody>
                 </Table>
+                <Anchor
+                  component={Link}
+                  to={`/climatological-values/values?station_code=${station.station_code}`}
+                  size="sm"
+                >
+                  Valores diarios
+                </Anchor>
               </Popup>
             </Marker>
           ))}
