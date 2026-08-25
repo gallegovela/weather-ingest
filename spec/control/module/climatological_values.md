@@ -19,6 +19,12 @@ section with [`stations`](./stations.md), both being data imported
 from AEMET:
 
 1. **Valores Diarios** — paginated table with a filter per field.
+   Route: `/climatological-values/values`, matching `GET
+   /api/climatological-values/values` (same route-mirrors-endpoint
+   criterion already used for `config`'s single screen,
+   `/config/values` ↔ `GET /api/config/values`) — flat, not nested
+   under `/data/aemet/...`, per `core.md`'s "route structure doesn't
+   mirror the menu's nesting".
 
 ## Screens
 

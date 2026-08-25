@@ -11,6 +11,7 @@ from modules.stations.router import router as stations_router
 from modules.security.router import router as security_router
 from modules.config.router import router as config_router
 from modules.jobs.router import router as jobs_router
+from modules.climatological_values.router import router as climatological_values_router
 
 app = FastAPI(title="Panel de control - weather")
 
@@ -18,3 +19,4 @@ app.include_router(security_router)
 app.include_router(stations_router)
 app.include_router(config_router)
 app.include_router(jobs_router)
+app.include_router(climatological_values_router)

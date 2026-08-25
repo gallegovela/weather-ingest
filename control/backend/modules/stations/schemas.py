@@ -22,3 +22,4 @@ class StationOut(BaseModel):
     synoptic_code: str | None
     created_at: datetime
     updated_at: datetime
+    daily_values_count: int

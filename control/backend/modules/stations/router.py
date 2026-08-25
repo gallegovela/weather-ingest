@@ -23,7 +23,7 @@ def _to_station_out(row: tuple) -> StationOut:
     (
         station_code, name, province, latitude, longitude,
         latitude_decimal, longitude_decimal, altitude, synoptic_code,
-        created_at, updated_at,
+        created_at, updated_at, daily_values_count,
     ) = row
     return StationOut(
         station_code=station_code, name=name, province=province,
@@ -31,6 +31,7 @@ def _to_station_out(row: tuple) -> StationOut:
         latitude_decimal=latitude_decimal, longitude_decimal=longitude_decimal,
         altitude=altitude, synoptic_code=synoptic_code,
         created_at=created_at, updated_at=updated_at,
+        daily_values_count=daily_values_count,
     )
 
 
