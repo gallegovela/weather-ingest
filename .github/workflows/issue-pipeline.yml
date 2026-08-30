@@ -1,11 +1,14 @@
 name: Issue pipeline
 
 # Label-gated stages, each running the local `claude` CLI on the
-# ionosL1 self-hosted runner (already logged into a Claude
-# subscription -- not the anthropics/claude-code-action marketplace
-# action, which would need a redundant second auth path). See the
-# design doc for the full rationale (labels vs. Project Status, tool
-# scoping per stage, why check-permission exists).
+# ionosL1 self-hosted runner, authenticated via CLAUDE_CODE_OAUTH_TOKEN
+# (a long-lived token from `claude setup-token`, stored as an
+# organization secret) -- not the anthropics/claude-code-action
+# marketplace action, which would need a redundant second auth path,
+# and not an interactive login on the runner host either (the token is
+# supplied per-run, nothing persists on the runner). See the design
+# doc for the full rationale (labels vs. Project Status, tool scoping
+# per stage, why check-permission exists).
 #
 # documentation  -> propose a spec/ change plan, comment it. No writes.
 # preparation    -> create/reuse branch issue-<n>, apply the spec/
@@ -27,6 +30,12 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+
+env:
+  # Org-level secret: a long-lived token from `claude setup-token`,
+  # not a per-user OAuth browser session -- lets every job authenticate
+  # without any interactive login step on the runner itself.
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
 jobs:
   check-permission:
