@@ -33,7 +33,7 @@ jobs:
     # Hand-invoking the CLI (instead of the marketplace action) means
     # we lose its built-in write-access check -- added back here,
     # once, shared by every stage job via `needs`.
-    runs-on: ionosL1
+    runs-on: ionos-l1-claude
     outputs:
       allowed: ${{ steps.check.outputs.allowed }}
     steps:
