@@ -299,7 +299,16 @@ Natural key: `key`.
 
 ### Pending decisions
 
-None.
+- **Possible new key, `SCHEDULER_MAX_DATE_RANGE_ALL_STATIONS`**:
+  `daily_values_all_stations` (see `spec/ingest/DAILY_VALUES.md`,
+  "Import mode: all stations at once") is expected to have a much
+  shorter maximum date range than `SCHEDULER_MAX_DATE_RANGE`'s `180`
+  days, since it returns rows for every station at once rather than
+  one. Whether it needs its own `config_values` key (seeded by its own
+  migration, same pattern as `SCHEDULER_MAX_DATE_RANGE`) or can reuse
+  the existing one depends on the real AEMET limit, still pending
+  empirical verification (see `spec/ingest/DAILY_VALUES.md`) — not
+  decided until that number is known.
 
 ## Table `ingest_jobs`
 
@@ -318,8 +327,8 @@ No natural key: each row is a job execution request, not an entity.
 | Column          | Type        | Null | Description                                                                 |
 |-----------------|-------------|------|--------------------------------------------------------------------------------|
 | `id`            | `bigint`    | No   | Auto-numbered technical identifier (primary key).                            |
-| `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`).      |
-| `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`). |
+| `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`, `daily_values_all_stations`). |
+| `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`; `{"date_from", "date_to"}` for `daily_values_all_stations`). |
 | `status`        | `varchar`   | No   | One of `pending`, `running`, `success`, `error`, `cancelled`. Defaults to `pending`. |
 | `created_at`    | `timestamp` | No   | Date/time the job was queued.                                                 |
 | `started_at`    | `timestamp` | Yes  | Date/time the worker claimed the job.                                         |

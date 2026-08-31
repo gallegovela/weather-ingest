@@ -9,10 +9,17 @@ given station and date range, and persists them in the local database
 [`spec/db/tables.md`](../db/tables.md)).
 
 Unlike the station inventory job, this one always runs with
-**parameters** — a station and a date range — supplied by the job that
-triggers it (see [`spec/control/module/jobs.md`](../control/module/jobs.md)
-and [`spec/ingest/general.md`](./general.md)): there's no "import
-everything" mode, the user picks what to import each time.
+**parameters** — at least a date range, and, depending on the import
+mode, a station — supplied by the job that triggers it (see
+[`spec/control/module/jobs.md`](../control/module/jobs.md) and
+[`spec/ingest/general.md`](./general.md)): the user picks what to
+import each time. Two import modes share the same table, transform and
+load logic (see "Import mode: all stations at once" below):
+
+- **Per station** (`job_type` `daily_values`): one station, one date
+  range.
+- **All stations at once** (`job_type` `daily_values_all_stations`):
+  every station AEMET has data for, one date range.
 
 ## Data source
 
@@ -80,7 +87,7 @@ confirm this table, rather than relying on third-party summaries):
 | Field         | Type (source) | Description                                             | Example       |
 |---------------|---------------|-----------------------------------------------------------|---------------|
 | `fecha`       | string        | Day, `AAAA-MM-DD`                                          | `2024-01-01`  |
-| `indicativo`  | string        | Station code (redundant with the request's `estacion`, not stored — see `spec/db/tables.md`) | `3195` |
+| `indicativo`  | string        | Station code; matches the request's `estacion` param for this job, and is what `transform()` reads to populate `station_code` (see "Transformations to apply") | `3195` |
 | `nombre`, `provincia`, `altitud` | string | Station metadata, redundant with `stations` (not stored) | — |
 | `tmed`        | string (float, comma decimal) | Daily mean temperature (°C)               | `"6,6"`       |
 | `prec`        | string (float, comma decimal, or sentinel) | Daily precipitation (mm); `Ip` = trace (<0.1mm); `Acum` = accumulated over several days | `"0,0"`, `"Ip"` |
@@ -112,9 +119,12 @@ Notes:
 
 ## Transformations to apply
 
-1. **Station/date**: use the job's own `station_code` (not `indicativo`
-   from the response — they're the same value, but the job's param is
-   the source of truth) and parse `fecha` as a date.
+1. **Station/date**: use `indicativo` from the response as
+   `station_code` (the same value as the job's own `station_code`
+   param, but `transform()` reads it off the response rather than off
+   `params` — this also makes `transform()` reusable as-is for the
+   "all stations" import mode below, where there's no single
+   `station_code` param to fall back on) and parse `fecha` as a date.
 2. **Numeric fields** (`tmed`, `tmin`, `tmax`, `dir`, `velmedia`,
    `racha`, `sol`, `presMax`, `presMin`, `hrMedia`, `hrMax`, `hrMin`,
    `pintMax`): replace `,` with `.`, convert to `float`; absent field →
@@ -126,8 +136,9 @@ Notes:
    `spec/db/tables.md` for why.
 4. **`hora*` fields**: stored as-is (`varchar`), no parsing — see
    "Source fields" notes above.
-5. **Drop** `indicativo`, `nombre`, `provincia`, `altitud` from the
-   response (redundant with `stations`, see `spec/db/tables.md`).
+5. **Drop** `nombre`, `provincia`, `altitud` from the response
+   (redundant with `stations`, see `spec/db/tables.md`); `indicativo`
+   is kept — see point 1.
 
 ## Load strategy
 
@@ -158,14 +169,64 @@ Executed by the job worker (`spec/ingest/general.md`) for a
 7. Report totals (rows inserted/updated) back on the `ingest_jobs` row
    (`spec/db/tables.md`).
 
+## Import mode: all stations at once
+
+Second import mode of this same job (`job_type`
+`daily_values_all_stations`), triggered from a dedicated screen in the
+Jobs module (see `spec/control/module/jobs.md`): instead of a single
+station, one call covers every station AEMET has data for, for the
+same date range.
+
+- **Endpoint:**
+  `GET https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos/fechaini/{fechaIniStr}/fechafin/{fechaFinStr}/todasestaciones`
+  — same two-step pattern, authentication, encoding and `metadatos`
+  shape as the per-station endpoint (same underlying resource,
+  aggregated across stations rather than filtered to one).
+- **`params = {date_from, date_to}`** — no `station_code`: `indicativo`
+  in each returned record is what identifies the station a given row
+  belongs to (see "Transformations to apply" above, point 1 — this is
+  exactly why that logic already reads `indicativo` off the response
+  instead of off `params`, rather than being duplicated here).
+- **Same `transform()` and `UPSERT_SQL`, unchanged**: since
+  `station_code` already comes from `indicativo`, every other field is
+  parsed identically to the per-station mode. This mode is a different
+  endpoint and a different `params` shape, not a different transform.
+- **Date range limit — pending empirical verification.** The per-day,
+  all-stations volume returned by this endpoint (~900-950 stations ×
+  each day in range) is much larger than a single station's, so the
+  limit AEMET enforces here is expected to be materially shorter than
+  the per-station endpoint's ~6 months (see "Date range limit" above)
+  — must be confirmed against the live API (same methodology already
+  used for the per-station limit: call the real endpoint, don't trust
+  third-party docs) before this is relied on anywhere. Until verified,
+  treated as **unknown, not assumed equal to `SCHEDULER_MAX_DATE_RANGE`**.
+- **Row-level error handling**: same as the per-station mode — a
+  single record's upsert failing (e.g. an `indicativo` with no matching
+  `stations` row, which would violate the `station_code` foreign key)
+  is caught per-row, counted in `errors`, and doesn't abort the rest of
+  the batch (see "Job flow (summary)" above, and `ingest/daily_values.py`'s
+  existing per-record `try`/`except` in `run_import`).
+- **Same rate-limit retry** as the per-station mode (`429` with
+  backoff, see "Date range limit" above) — same shared
+  `ingest/aemet_client.py`.
+- **Implementation — decided: same module, new function.** A new
+  `run_import_all_stations(params)` in `ingest/daily_values.py`,
+  reusing `transform()`/`UPSERT_SQL` as-is, rather than a separate
+  module — the transform/load logic is identical, only the endpoint
+  and the `params` shape differ (see `CLAUDE.md`, "Code conventions":
+  each ingestion script owns its own transform/load, which here is
+  genuinely one shared implementation, not two).
+
 ## Implementation
 
-Script in `ingest/daily_values.py`, backed by the shared
-`ingest/aemet_client.py` (two-step pattern + decoding — extended with
-retry/backoff for `429`, see "Date range limit") and `ingest/db.py`.
-Invoked by the job worker (`spec/ingest/general.md`), not run directly
-on the command line like `ingest/stations.py` (though nothing prevents
-calling it manually with explicit parameters for debugging).
+Both import modes live in `ingest/daily_values.py` (`run_import` for
+the per-station mode, `run_import_all_stations` for the "all stations"
+mode — see above), backed by the shared `ingest/aemet_client.py`
+(two-step pattern + decoding — extended with retry/backoff for `429`,
+see "Date range limit") and `ingest/db.py`. Invoked by the job worker
+(`spec/ingest/general.md`), not run directly on the command line like
+`ingest/stations.py` (though nothing prevents calling either function
+manually with explicit parameters for debugging).
 
 ## Additional decisions
 

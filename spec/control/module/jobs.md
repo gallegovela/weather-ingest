@@ -7,11 +7,11 @@ the rest of the project's code and docs, is in English).
 ## Objective
 
 Let an authenticated user queue ingestion runs for any of the
-project's ingestion scripts — currently the station inventory import,
-and, once implemented, the daily climatological values import by
-station and date range — from the control panel, and follow their
-status, without running scripts by hand or accessing the database
-directly.
+project's ingestion scripts — the station inventory import, the daily
+climatological values import by station and date range, and the daily
+climatological values import for all stations at once — from the
+control panel, and follow their status, without running scripts by
+hand or accessing the database directly.
 
 Jobs are queued **on demand, whenever the user wants**, with whatever
 parameters they choose each time — **not** on a periodic/cron
@@ -28,15 +28,19 @@ structure" in `core.md`), with **one subitem per ingestion script**
 1. **Stations** — queue a station inventory import.
 2. **Daily values** — queue a daily climatological values import for a
    station and date range.
+3. **Daily values (all stations)** — queue a daily climatological
+   values import for every station at once, over a date range (see
+   `spec/ingest/DAILY_VALUES.md`, "Import mode: all stations at once").
 
 **Unlike other modules**, where subitems are different views of the
 same functional area (e.g. `stations` → List/Map over the same data),
 here **each subitem is a self-contained screen tailored to that job
 type's own parameters** — decided, since different ingestion scripts
 need different inputs, from none (`stations`) to a station and a date
-range (`daily_values`) to whatever a future script needs. This module
-has no single reference screen the way `stations` is the reference for
-paginated listings; each job-type screen follows the same small
+range (`daily_values`) to a date range alone
+(`daily_values_all_stations`) to whatever a future script needs. This
+module has no single reference screen the way `stations` is the
+reference for paginated listings; each job-type screen follows the same small
 pattern (parameter form if any + job history list), described per
 screen below. Adding a new ingestion script means adding a new
 subitem/screen here.
@@ -121,6 +125,43 @@ subitem/screen here.
   job" below), and the same selection + **Delete selected** action
   (see "Deleting jobs" below).
 
+### 3. Daily values (all stations)
+
+- Form with **only** the two date fields — **no station picker**:
+  unlike the Daily values screen, this job type has no `station_code`
+  parameter (see `spec/ingest/DAILY_VALUES.md`, "Import mode: all
+  stations at once").
+  - **Date from** / **Date to**: the import's date range.
+- **Queue import** button creates an `ingest_jobs` row with `job_type
+  = 'daily_values_all_stations'` and `params = {"date_from": ...,
+  "date_to": ...}`.
+- **Validation — decided:** same as the Daily values screen — both
+  dates required, `date_from <= date_to`, checked in the service layer.
+- **Maximum range per job — pending, tied to the same open question in
+  `spec/ingest/DAILY_VALUES.md`.** Whether this screen enforces
+  `SCHEDULER_MAX_DATE_RANGE` (same key as Daily values) or a dedicated,
+  presumably shorter, limit (`SCHEDULER_MAX_DATE_RANGE_ALL_STATIONS`,
+  see `spec/db/tables.md`, `config_values`, "Pending decisions")
+  depends on the real AEMET range limit for the `todasestaciones`
+  endpoint, still pending empirical verification. **Not implemented
+  until that's resolved.**
+- **Splitting a too-large range**: same "Split into N imports" /
+  "Redefine the range" choice as the Daily values screen, once the
+  applicable limit above is decided.
+- **Overlap warning — decided: not applicable.** Unlike the Daily
+  values screen, there's no single `station_code` to check
+  `climatological_values` against before queuing — this job type
+  always covers every station in the response, so a pre-flight overlap
+  check would mean scanning the whole table rather than one station's
+  rows. Overwriting on re-import is still the expected, accepted
+  behavior (`spec/ingest/DAILY_VALUES.md`, "Load strategy"); this
+  screen just doesn't warn about it first.
+- Same **history list** pattern as the other two screens, filtered to
+  `job_type = 'daily_values_all_stations'` (no `station_code` filter,
+  since this job type doesn't have one), the same per-row **Cancel**
+  action on `pending` jobs (see "Cancelling a job" below), and the same
+  selection + **Delete selected** action (see "Deleting jobs" below).
+
 ## Cancelling a job
 
 - **Decided: a `pending` job can be cancelled; a `running` one can't.**
@@ -196,6 +237,16 @@ internally.
   jobs, filterable by `status`, `created_at` range and `station_code`.
 - `POST /api/jobs/daily-values/{id}/cancel` — cancel a `pending` daily
   values job. Same `400` behavior as above.
+- `POST /api/jobs/daily-values-all-stations` — queue a daily values
+  (all stations) import job. Body: `{"date_from", "date_to"}` — no
+  `station_code`, unlike `POST /api/jobs/daily-values`.
+- `GET /api/jobs/daily-values-all-stations` — paginated history of
+  daily values (all stations) jobs, filterable by `status` and
+  `created_at` range (no `station_code` filter — this job type has no
+  such param).
+- `POST /api/jobs/daily-values-all-stations/{id}/cancel` — cancel a
+  `pending` daily values (all stations) job. Same `400` behavior as
+  above.
 - **`POST .../cancel`, not `DELETE`** — decided: the row isn't removed
   (a cancelled job is kept as history, `spec/db/tables.md`), only its
   `status` changes, so this is an action/state-transition endpoint
@@ -205,6 +256,8 @@ internally.
   given stations jobs. Works the same for a single id (`{"ids": [1]}`)
   — see "Deleting jobs" above, "one action for one or many".
 - `DELETE /api/jobs/daily-values` — same, for daily values jobs.
+- `DELETE /api/jobs/daily-values-all-stations` — same, for daily values
+  (all stations) jobs.
 - **`DELETE` with a body, scoped per job type** — decided: this one
   *is* a real deletion, so `DELETE` is the right verb (contrast with
   `.../cancel` above); a body carrying a list of ids is used instead

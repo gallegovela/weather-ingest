@@ -24,10 +24,13 @@ Concrete first candidates:
 - `ingest/stations.py`'s `parse_coordenada` (AEMET's `GGMMSSH`
   coordinate format → decimal degrees, including hemisphere sign) —
   see `spec/ingest/STATIONS.md`.
-- `ingest/daily_values.py`'s (once implemented) comma-decimal parsing
-  and `prec` sentinel handling (`Ip`/`Acum` → `NULL` in
-  `precipitation_mm`, raw value kept in `precipitation_raw`) — see
-  `spec/ingest/DAILY_VALUES.md`.
+- `ingest/daily_values.py`'s comma-decimal parsing and `prec` sentinel
+  handling (`Ip`/`Acum` → `NULL` in `precipitation_mm`, raw value kept
+  in `precipitation_raw`) — see `spec/ingest/DAILY_VALUES.md`. Covers
+  `run_import_all_stations` too, once implemented: it reuses the same
+  `transform()` as `run_import` unchanged (see `spec/ingest/DAILY_VALUES.md`,
+  "Import mode: all stations at once"), so it needs no test of its
+  own beyond this one.
 - `control/backend/modules/jobs/`'s (once implemented) validation:
   `date_from <= date_to` and the `SCHEDULER_MAX_DATE_RANGE` check —
   see `spec/control/module/jobs.md`.

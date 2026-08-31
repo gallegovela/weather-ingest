@@ -11,6 +11,14 @@ values from the panel — that data is managed by the ingestion job,
 triggered from the [`jobs`](./jobs.md) module ("Planificador"), not
 from here.
 
+Rows in this table can come from either of `ingest/daily_values.py`'s
+two import modes — per station (`daily_values`) or all stations at
+once (`daily_values_all_stations`, see
+[`spec/ingest/DAILY_VALUES.md`](../../ingest/DAILY_VALUES.md), "Import
+mode: all stations at once") — indistinguishably: this listing doesn't
+track or filter by which mode produced a given row, since the table
+itself doesn't record that (both modes upsert into the same columns).
+
 ## Menu
 
 One entry under the side menu's **"Datos ingestados" → "AEMET"**
