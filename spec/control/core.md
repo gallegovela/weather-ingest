@@ -229,12 +229,13 @@ Basic web layout, common to every panel screen once logged in:
   - **A section can also group the screens of several modules under a
     shared label plus an intermediate sub-heading — decided.** First
     used for "Datos ingestados" ("Ingested data"): it groups
-    `stations`'s List/Map and `climatological_values`'s listing under
-    an "AEMET" sub-heading, since AEMET is currently the project's
-    only ingestion data source but doesn't have to stay the only one
-    — a future source would get its own sub-heading in the same
-    top-level section instead of a whole new top-level entry, and the
-    top-level menu doesn't grow one entry per data-viewing module.
+    `stations`'s List/Map and `climatological_values`'s listing and
+    chart screens under an "AEMET" sub-heading, since AEMET is
+    currently the project's only ingestion data source but doesn't
+    have to stay the only one — a future source would get its own
+    sub-heading in the same top-level section instead of a whole new
+    top-level entry, and the top-level menu doesn't grow one entry per
+    data-viewing module.
     Which section (and, if grouped, which sub-heading) a module's
     screens belong to is decided per module and documented in that
     module's own `spec/control/module/<module>.md` file ("Menu"
@@ -328,6 +329,14 @@ authentication for the whole app).
   `@mantine/form`, tables, confirmation modals for destructive actions
   like deleting a user, and the left-menu-column + content layout
   described in "Application structure").
+- **Charting library — decided: `@mantine/charts`** (built on
+  Recharts), first needed by `climatological_values`'s "Daily values
+  chart" screen (see
+  [`spec/control/module/climatological_values.md`](./module/climatological_values.md)).
+  Chosen for consistency with Mantine already being the project's UI
+  library, same criterion already used to justify Leaflet/OpenStreetMap
+  for `stations`'s map screen (see
+  [`spec/control/module/stations.md`](./module/stations.md)).
 
 ## REST API contract
 

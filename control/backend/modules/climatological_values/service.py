@@ -19,3 +19,11 @@ def list_values(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "page_size must be >= 1")
 
     return dao.list_values(conn, page, page_size, filters)
+
+
+def list_years(conn: Connection, station_code: str) -> list[int]:
+    return dao.list_years(conn, station_code)
+
+
+def monthly_counts(conn: Connection, station_code: str, year: int) -> list[int]:
+    return dao.monthly_counts(conn, station_code, year)

@@ -152,3 +152,22 @@ def list_values(
     return Page(
         items=[_to_value_out(r) for r in rows], total=total, page=page, page_size=page_size
     )
+
+
+@router.get("/years", response_model=list[int])
+def list_years(
+    station_code: str,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    return service.list_years(conn, station_code)
+
+
+@router.get("/monthly-counts", response_model=list[int])
+def monthly_counts(
+    station_code: str,
+    year: int,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    return service.monthly_counts(conn, station_code, year)

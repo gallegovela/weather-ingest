@@ -97,3 +97,34 @@ def list_values(
         rows = cur.fetchall()
 
     return rows, total
+
+
+def list_years(conn: Connection, station_code: str) -> list[int]:
+    """Distinct years with at least one imported row for a station,
+    descending -- feeds the "Daily values chart" screen's year selector
+    (spec/control/module/climatological_values.md)."""
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(
+            "SELECT DISTINCT EXTRACT(YEAR FROM date)::int AS year "
+            "FROM climatological_values WHERE station_code = %(station_code)s "
+            "ORDER BY year DESC",
+            {"station_code": station_code},
+        )
+        return [year for (year,) in cur.fetchall()]
+
+
+def monthly_counts(conn: Connection, station_code: str, year: int) -> list[int]:
+    """Row count per month (12 values, January first) of
+    climatological_values for a station/year -- feeds chart 1 (monthly
+    counts bar chart) on the "Daily values chart" screen."""
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(
+            "SELECT EXTRACT(MONTH FROM date)::int AS month, count(*) "
+            "FROM climatological_values "
+            "WHERE station_code = %(station_code)s AND EXTRACT(YEAR FROM date) = %(year)s "
+            "GROUP BY month",
+            {"station_code": station_code, "year": year},
+        )
+        counts_by_month = dict(cur.fetchall())
+
+    return [counts_by_month.get(month, 0) for month in range(1, 13)]
