@@ -13,3 +13,11 @@ function toQueryString(params) {
 export function listClimatologicalValues(params) {
   return apiClient.get(`/climatological-values/values?${toQueryString(params)}`);
 }
+
+export function getClimatologicalValuesYears(params) {
+  return apiClient.get(`/climatological-values/years?${toQueryString(params)}`);
+}
+
+export function getClimatologicalValuesMonthlyCounts(params) {
+  return apiClient.get(`/climatological-values/monthly-counts?${toQueryString(params)}`);
+}

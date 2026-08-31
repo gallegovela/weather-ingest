@@ -23,6 +23,7 @@ const MODULES = [
           { label: "Listado", to: "/stations/list" },
           { label: "Mapa", to: "/stations/map" },
           { label: "Valores Diarios", to: "/climatological-values/values" },
+          { label: "Gráfico Valores Diarios", to: "/climatological-values/chart" },
         ],
       },
     ],

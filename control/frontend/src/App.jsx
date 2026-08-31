@@ -10,6 +10,7 @@ import { Stations as StationsJobs } from "./modules/jobs/Stations";
 import { DailyValues as DailyValuesJobs } from "./modules/jobs/DailyValues";
 import { ValuesList as ConfigValuesList } from "./modules/config/ValuesList";
 import { ValuesList as ClimatologicalValuesList } from "./modules/climatological_values/ValuesList";
+import { DailyValuesChart } from "./modules/climatological_values/DailyValuesChart";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/jobs/daily-values" element={<DailyValuesJobs />} />
           <Route path="/config/values" element={<ConfigValuesList />} />
           <Route path="/climatological-values/values" element={<ClimatologicalValuesList />} />
+          <Route path="/climatological-values/chart" element={<DailyValuesChart />} />
         </Route>
       </Route>
 
