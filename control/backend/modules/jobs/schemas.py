@@ -28,5 +28,10 @@ class DailyValuesJobCreate(BaseModel):
     date_to: date
 
 
+class DailyValuesAllStationsJobCreate(BaseModel):
+    date_from: date
+    date_to: date
+
+
 class JobDeleteRequest(BaseModel):
     ids: list[int]

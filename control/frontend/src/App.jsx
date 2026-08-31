@@ -8,6 +8,7 @@ import { List as StationsList } from "./modules/stations/List";
 import { UsersList } from "./modules/security/UsersList";
 import { Stations as StationsJobs } from "./modules/jobs/Stations";
 import { DailyValues as DailyValuesJobs } from "./modules/jobs/DailyValues";
+import { DailyValuesAllStations as DailyValuesAllStationsJobs } from "./modules/jobs/DailyValuesAllStations";
 import { ValuesList as ConfigValuesList } from "./modules/config/ValuesList";
 import { ValuesList as ClimatologicalValuesList } from "./modules/climatological_values/ValuesList";
 
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/security/users" element={<UsersList />} />
           <Route path="/jobs/stations" element={<StationsJobs />} />
           <Route path="/jobs/daily-values" element={<DailyValuesJobs />} />
+          <Route path="/jobs/daily-values-all-stations" element={<DailyValuesAllStationsJobs />} />
           <Route path="/config/values" element={<ConfigValuesList />} />
           <Route path="/climatological-values/values" element={<ClimatologicalValuesList />} />
         </Route>

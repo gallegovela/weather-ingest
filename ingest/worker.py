@@ -22,6 +22,7 @@ log = logging.getLogger("ingest.worker")
 JOB_HANDLERS = {
     "stations": stations.run_import,
     "daily_values": daily_values.run_import,
+    "daily_values_all_stations": daily_values.run_import_all_stations,
 }
 
 _CLAIM_SQL = """
