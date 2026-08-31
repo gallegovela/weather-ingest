@@ -194,6 +194,11 @@ Natural key: `station_code` + `date`.
 
 - None beyond the ones already covered in
   `spec/ingest/DAILY_VALUES.md`.
+- Not a decision to make, just a note: the "Daily values chart"
+  screen's aggregations (distinct years, monthly counts per station —
+  see `spec/control/module/climatological_values.md`) run against the
+  existing composite primary key (`station_code`, `date`), so no
+  additional index is needed for them.
 
 ## Table `config_values`
 
