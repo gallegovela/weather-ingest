@@ -37,6 +37,7 @@ const MODULES = [
     items: [
       { label: "Estaciones", to: "/jobs/stations" },
       { label: "Valores diarios", to: "/jobs/daily-values" },
+      { label: "Valores diarios (todas las estaciones)", to: "/jobs/daily-values-all-stations" },
     ],
   },
   {

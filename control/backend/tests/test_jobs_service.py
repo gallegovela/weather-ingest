@@ -53,6 +53,32 @@ def test_create_daily_values_job_accepts_valid_range(monkeypatch):
     }
 
 
+def test_create_daily_values_all_stations_job_rejects_date_from_after_date_to():
+    with pytest.raises(HTTPException) as exc_info:
+        service.create_daily_values_all_stations_job(
+            conn=None, date_from=date(2024, 4, 5), date_to=date(2024, 4, 1)
+        )
+    assert exc_info.value.status_code == 400
+
+
+def test_create_daily_values_all_stations_job_accepts_valid_range(monkeypatch):
+    captured = {}
+
+    def fake_create_job(conn, job_type, params):
+        captured["job_type"] = job_type
+        captured["params"] = params
+        return (1, job_type, params, "pending", None, None, None, None, None, None)
+
+    monkeypatch.setattr(dao, "create_job", fake_create_job)
+
+    service.create_daily_values_all_stations_job(
+        conn=None, date_from=date(2024, 4, 1), date_to=date(2024, 4, 5)
+    )
+
+    assert captured["job_type"] == "daily_values_all_stations"
+    assert captured["params"] == {"date_from": "2024-04-01", "date_to": "2024-04-05"}
+
+
 def test_cancel_job_raises_400_when_no_longer_pending(monkeypatch):
     monkeypatch.setattr(dao, "cancel_job", lambda conn, job_type, job_id: False)
 

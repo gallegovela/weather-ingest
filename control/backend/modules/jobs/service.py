@@ -38,6 +38,21 @@ def create_daily_values_job(
     return dao.create_job(conn, "daily_values", params)
 
 
+def create_daily_values_all_stations_job(conn: Connection, date_from: date, date_to: date) -> tuple:
+    # No SCHEDULER_MAX_DATE_RANGE-style check here yet: the max range for
+    # this endpoint is still pending empirical verification against the
+    # live API (spec/ingest/DAILY_VALUES.md, "Import mode: all stations
+    # at once"; spec/control/module/jobs.md, "Daily values (all
+    # stations)") -- only the date_from <= date_to check applies so far.
+    if date_from > date_to:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "La fecha de inicio no puede ser posterior a la de fin"
+        )
+
+    params = {"date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
+    return dao.create_job(conn, "daily_values_all_stations", params)
+
+
 def list_jobs(
     conn: Connection, job_type: str, page: int, page_size: int, filters: dict
 ) -> tuple[list[tuple], int]:

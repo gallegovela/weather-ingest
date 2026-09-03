@@ -15,7 +15,7 @@ from core.auth import CurrentUser, get_current_user
 from core.db import get_db
 from core.schemas import Page
 from modules.jobs import service
-from modules.jobs.schemas import DailyValuesJobCreate, JobDeleteRequest, JobOut
+from modules.jobs.schemas import DailyValuesAllStationsJobCreate, DailyValuesJobCreate, JobDeleteRequest, JobOut
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -116,3 +116,45 @@ def delete_daily_values_jobs(
     conn: Connection = Depends(get_db),
 ):
     service.delete_jobs(conn, "daily_values", data.ids)
+
+
+@router.post("/daily-values-all-stations", response_model=JobOut, status_code=status.HTTP_201_CREATED)
+def create_daily_values_all_stations_job(
+    data: DailyValuesAllStationsJobCreate,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    return _to_job_out(
+        service.create_daily_values_all_stations_job(conn, data.date_from, data.date_to)
+    )
+
+
+@router.get("/daily-values-all-stations", response_model=Page[JobOut])
+def list_daily_values_all_stations_jobs(
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+    created_at_from: date | None = None,
+    created_at_to: date | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    filters = {"status": status, "created_at_from": created_at_from, "created_at_to": created_at_to}
+    rows, total = service.list_jobs(conn, "daily_values_all_stations", page, page_size, filters)
+    return Page(items=[_to_job_out(r) for r in rows], total=total, page=page, page_size=page_size)
+
+
+@router.post("/daily-values-all-stations/{job_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_daily_values_all_stations_job(
+    job_id: int, user: CurrentUser = Depends(get_current_user), conn: Connection = Depends(get_db)
+):
+    service.cancel_job(conn, "daily_values_all_stations", job_id)
+
+
+@router.delete("/daily-values-all-stations", status_code=status.HTTP_204_NO_CONTENT)
+def delete_daily_values_all_stations_jobs(
+    data: JobDeleteRequest,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    service.delete_jobs(conn, "daily_values_all_stations", data.ids)

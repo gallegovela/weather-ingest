@@ -1,12 +1,12 @@
-"""Import of AEMET daily climatological values for a station and date range.
+"""Import of AEMET daily climatological values, either for a station and
+date range or for every station at once (same date range).
 
 See spec/ingest/DAILY_VALUES.md for the detail of the process (AEMET
 endpoint, decimal-comma parsing, precipitation sentinels, dropped
 redundant fields) and spec/db/tables.md for the destination schema.
 
-Always runs with parameters (station + date range) supplied by the job
-that triggers it (spec/control/module/jobs.md) or, for manual
-debugging, CLI arguments:
+Always runs with parameters supplied by the job that triggers it
+(spec/control/module/jobs.md) or, for manual debugging, CLI arguments:
 
     python -m ingest.daily_values --station 3195 --from 2024-01-01 --to 2024-01-31
 """
@@ -21,6 +21,15 @@ from ingest import aemet_client, db
 ENDPOINT_TEMPLATE = (
     "https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos/"
     "fechaini/{date_from}T00:00:00UTC/fechafin/{date_to}T00:00:00UTC/estacion/{station_code}"
+)
+
+# "All stations" import mode (spec/ingest/DAILY_VALUES.md, "Import mode:
+# all stations at once"): same resource, aggregated across every station
+# AEMET has data for instead of filtered to one -- station_code comes from
+# each record's own indicativo (see transform()), not from params.
+ALL_STATIONS_ENDPOINT_TEMPLATE = (
+    "https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos/"
+    "fechaini/{date_from}T00:00:00UTC/fechafin/{date_to}T00:00:00UTC/todasestaciones"
 )
 
 UPSERT_SQL = """
@@ -139,23 +148,12 @@ def transform(record: dict) -> dict:
     return result
 
 
-def run_import(params: dict) -> ImportResult:
-    """Runs the import for params = {station_code, date_from, date_to}
-    (a date range already guaranteed by the caller to fit AEMET's
-    per-request limit -- see spec/ingest/DAILY_VALUES.md, "Date range
-    limit") and returns its result."""
-
-    station_code = params["station_code"]
-    endpoint = ENDPOINT_TEMPLATE.format(
-        station_code=station_code,
-        date_from=params["date_from"],
-        date_to=params["date_to"],
-    )
-
-    raw_records = aemet_client.fetch(endpoint)
-    log.info(
-        "Received %d daily values for station %s", len(raw_records), station_code
-    )
+def _upsert_records(raw_records: list) -> ImportResult:
+    """Transforms and upserts each raw record, one row/transaction at a
+    time so a single record's failure (e.g. an indicativo with no
+    matching stations row) is counted in errors without aborting the
+    rest of the batch -- see spec/ingest/DAILY_VALUES.md, "Row-level
+    error handling"."""
 
     inserted = updated = errors = 0
     with db.connect() as conn, conn.cursor() as cur:
@@ -182,6 +180,44 @@ def run_import(params: dict) -> ImportResult:
         errors,
     )
     return ImportResult(received=len(raw_records), inserted=inserted, updated=updated, errors=errors)
+
+
+def run_import(params: dict) -> ImportResult:
+    """Runs the import for params = {station_code, date_from, date_to}
+    (a date range already guaranteed by the caller to fit AEMET's
+    per-request limit -- see spec/ingest/DAILY_VALUES.md, "Date range
+    limit") and returns its result."""
+
+    station_code = params["station_code"]
+    endpoint = ENDPOINT_TEMPLATE.format(
+        station_code=station_code,
+        date_from=params["date_from"],
+        date_to=params["date_to"],
+    )
+
+    raw_records = aemet_client.fetch(endpoint)
+    log.info(
+        "Received %d daily values for station %s", len(raw_records), station_code
+    )
+    return _upsert_records(raw_records)
+
+
+def run_import_all_stations(params: dict) -> ImportResult:
+    """Runs the "all stations" import for params = {date_from, date_to}
+    (no station_code -- see spec/ingest/DAILY_VALUES.md, "Import mode:
+    all stations at once"): one call covers every station AEMET has
+    data for, over the same date range. Reuses transform()/UPSERT_SQL
+    unchanged, since station_code already comes from each record's own
+    indicativo."""
+
+    endpoint = ALL_STATIONS_ENDPOINT_TEMPLATE.format(
+        date_from=params["date_from"],
+        date_to=params["date_to"],
+    )
+
+    raw_records = aemet_client.fetch(endpoint)
+    log.info("Received %d daily values for all stations", len(raw_records))
+    return _upsert_records(raw_records)
 
 
 def main() -> None:
