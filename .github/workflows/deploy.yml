@@ -1,0 +1,38 @@
+name: Deploy
+
+# Continuous deployment: every push to `main` pulls (or clones, on the
+# first run) the persistent checkout at `SOURCE_PATH` on the runner's
+# host, then rebuilds and restarts the docker-compose stack there. See
+# spec/deploy.md for the full rationale (why SOURCE_PATH instead of
+# actions/checkout, queue-don't-cancel, no rollback on build failure).
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ionos-l1-docker
+    steps:
+      - name: Pull or clone the persistent checkout
+        env:
+          SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
+        run: |
+          if [ -d "$SOURCE_PATH" ]; then
+            git -C "$SOURCE_PATH" pull
+          else
+            git clone --branch main "git@github.com:${GITHUB_REPOSITORY}.git" "$SOURCE_PATH"
+          fi
+
+      - name: Rebuild and restart the stack
+        env:
+          SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
+        run: |
+          cd "$SOURCE_PATH"
+          docker-compose down
+          docker-compose build --no-cache
+          docker-compose up -d
