@@ -18,6 +18,17 @@ jobs:
   deploy:
     runs-on: ionos-l1-docker
     steps:
+      # Only to make the local `./.github/actions/setup-ssh-and-git`
+      # composite action resolvable (actions/checkout populates the
+      # ephemeral workspace it's loaded from) -- the deploy steps below
+      # still operate on SOURCE_PATH, not this checkout.
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-ssh-and-git
+        with:
+          ssh-key-passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
+          configure-remote: "false"
+
       - name: Pull or clone the persistent checkout
         env:
           SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
