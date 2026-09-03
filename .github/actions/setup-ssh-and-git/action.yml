@@ -2,10 +2,10 @@ name: Setup SSH agent and git identity
 description: >
   Unlocks the runner's own SSH key (already on disk -- this is meant
   for the persistent self-hosted runner, not an ephemeral GitHub-hosted
-  one) and points origin at the SSH remote, so a later `git push`
-  works unattended. Best-effort: the exact ssh-agent/SSH_ASKPASS
-  sequence hasn't been verified against the runner's actual OpenSSH
-  version.
+  one) and, unless `configure-remote` is set to "false", points origin
+  at the SSH remote so a later `git push` works unattended. Best-effort:
+  the exact ssh-agent/SSH_ASKPASS sequence hasn't been verified against
+  the runner's actual OpenSSH version.
 
 inputs:
   ssh-key-passphrase:
@@ -13,6 +13,15 @@ inputs:
   ssh-key-path:
     required: false
     default: ~/.ssh/id_ed25519
+  configure-remote:
+    description: >
+      Whether to point origin at the SSH remote and set the git commit
+      identity. Requires a git repository already checked out in the
+      current working directory (e.g. via actions/checkout). Set to
+      "false" for callers that only need the SSH agent unlocked, such
+      as deploy.yml, which runs before any checkout exists.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -40,7 +49,9 @@ runs:
 
         SSH_ASKPASS="$ASKPASS_SCRIPT" SSH_ASKPASS_REQUIRE=force setsid ssh-add "$SSH_KEY_PATH" < /dev/null
         rm -f "$ASKPASS_SCRIPT"
-
+    - shell: bash
+      if: inputs.configure-remote == 'true'
+      run: |
         git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
         git config user.name "Claude (automated)"
         git config user.email "noreply@anthropic.com"
