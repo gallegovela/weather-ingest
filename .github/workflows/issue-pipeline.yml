@@ -27,7 +27,7 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write
   issues: write
   pull-requests: write
 
@@ -90,9 +90,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: ./.github/actions/setup-ssh-and-git
-        with:
-          ssh-key-passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
+      - name: Configure git remote and identity
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "Claude (automated)"
+          git config user.email "noreply@anthropic.com"
 
       - name: Create or reuse the issue branch
         env:
@@ -133,9 +137,13 @@ jobs:
         with:
           ref: issue-${{ github.event.issue.number }}
 
-      - uses: ./.github/actions/setup-ssh-and-git
-        with:
-          ssh-key-passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
+      - name: Configure git remote and identity
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "Claude (automated)"
+          git config user.email "noreply@anthropic.com"
 
       - name: Run Claude
         env:

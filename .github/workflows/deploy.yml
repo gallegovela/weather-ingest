@@ -10,6 +10,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy
   cancel-in-progress: false
@@ -18,25 +21,17 @@ jobs:
   deploy:
     runs-on: ionos-l1-docker
     steps:
-      # Only to make the local `./.github/actions/setup-ssh-and-git`
-      # composite action resolvable (actions/checkout populates the
-      # ephemeral workspace it's loaded from) -- the deploy steps below
-      # still operate on SOURCE_PATH, not this checkout.
-      - uses: actions/checkout@v6
-
-      - uses: ./.github/actions/setup-ssh-and-git
-        with:
-          ssh-key-passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
-          configure-remote: "false"
-
       - name: Pull or clone the persistent checkout
         env:
           SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          REMOTE_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if [ -d "$SOURCE_PATH" ]; then
+            git -C "$SOURCE_PATH" remote set-url origin "$REMOTE_URL"
             git -C "$SOURCE_PATH" pull
           else
-            git clone --branch main "git@github.com:${GITHUB_REPOSITORY}.git" "$SOURCE_PATH"
+            git clone --branch main "$REMOTE_URL" "$SOURCE_PATH"
           fi
 
       - name: Rebuild and restart the stack
