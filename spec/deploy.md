@@ -41,9 +41,8 @@ only knows how to check out into the ephemeral workspace.
 
 ## Flow — decided
 
-0. Unlock the deployment SSH key (`.github/actions/setup-ssh-and-git`,
-   reused with remote/identity configuration skipped — see "Design
-   notes").
+0. Point the repo URL at the HTTPS remote authenticated with the
+   job's own `GITHUB_TOKEN` (see "Design notes") — no key to unlock.
 1. Check whether `SOURCE_PATH` exists (`test -d`).
 2. If it exists: `git -C "$SOURCE_PATH" pull`.
 3. If it doesn't: `git clone --branch main <repo-url> "$SOURCE_PATH"`.
@@ -52,34 +51,20 @@ only knows how to check out into the ephemeral workspace.
 
 ## Design notes
 
-- **`git` authentication on the runner — decided: reuse
-  `.github/actions/setup-ssh-and-git`.** Same pattern already used by
-  `issue-pipeline.yml`'s `preparation`/`implementation` stages: the
-  composite action unlocks the deploy SSH key (`~/.ssh/id_ed25519`,
-  passphrase in the `SSH_KEY_PASSPHRASE` secret) via `ssh-agent`, so
-  `git clone`/`git pull` over the SSH remote work unattended. Invoked
-  as step 0 of the `deploy` job, before touching `SOURCE_PATH`.
-- **Host prerequisite: the deploy key must also be present on
-  `ionos-l1-docker`.** `setup-ssh-and-git` assumes the key is already
-  on disk at `~/.ssh/id_ed25519` — true today for `ionos-l1-claude`,
-  and now required for `ionos-l1-docker` too. Provisioning the key on
-  that host is still host-level setup, out of this workflow's scope,
-  but it's now an explicit prerequisite instead of an omission.
-- **Reuse mismatch: `setup-ssh-and-git` needs an opt-out for
-  remote/identity configuration.** The action also runs `git remote
-  set-url origin ...` and `git config user.name/email` against the
-  repo already checked out in the current working directory — valid
-  in `preparation`/`implementation`, which run after
-  `actions/checkout`. `deploy.yml` has no `actions/checkout` (it
-  operates directly on `SOURCE_PATH`, which doesn't exist yet on the
-  first run) and never commits, so those two commands would fail
-  (`fatal: not a git repository`) if run as-is. Decision: give the
-  action an optional input (e.g. `configure-remote`, default `true`)
-  that `deploy.yml` sets to `false` to skip that part and only unlock
-  the SSH agent. Changing the action's interface is implementation,
-  not this spec — but it's documented here because `deploy.yml`
-  depends on this parameterized reuse instead of duplicating the
-  `ssh-agent`/`ssh-add` logic inline.
+- **`git` authentication on the runner — decided: the job's own
+  `GITHUB_TOKEN`, over HTTPS.** No SSH key, no `SSH_KEY_PASSPHRASE`
+  secret, no `.github/actions/setup-ssh-and-git`: `SOURCE_PATH` is
+  cloned/pulled from `https://x-access-token:${GITHUB_TOKEN}@github.com/<repo>.git`,
+  where `GITHUB_TOKEN` is the token GitHub Actions generates
+  automatically for each job run (`github.token` / `secrets.GITHUB_TOKEN`,
+  no provisioning needed). Replaces the previous design, which reused
+  `setup-ssh-and-git` (still used by `issue-pipeline.yml`'s
+  `preparation`/`implementation` stages — see `spec/issue_pipeline.md`
+  for that workflow's own migration to the same token-based approach).
+- **`permissions: contents: read`, declared explicitly.** The job
+  only needs read access to clone/pull; declaring it instead of
+  relying on the repository's default permissions makes the
+  requirement visible in the workflow file itself.
 - **`.env` in `SOURCE_PATH` is assumed to already exist on the
   server** and is left untouched by this flow. `docker-compose`
   needs it (production `DATABASE_URL`, etc.) and it's gitignored
