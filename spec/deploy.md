@@ -71,18 +71,26 @@ only knows how to check out into the ephemeral workspace.
   (`CLAUDE.md`, "Environment variables"), so it can't come from
   `git pull`/`git clone` — it must be provisioned on the server ahead
   of the first deploy, outside this workflow's responsibility.
-- **`SOURCE_PATH` must be owned by the runner's own user.** The flow
-  runs `git -C "$SOURCE_PATH" remote set-url` / `pull` as whichever
-  user `ionos-l1-docker`'s job runs as; if `SOURCE_PATH` (or its
-  `.git/config`) is owned by a different user — e.g. it was seeded by
-  an earlier manual clone done as another user — `git` cannot lock
-  `.git/config` to update it and the step fails with `error: could not
-  lock config file .git/config: Permission denied` (the incident
-  reported in issue #13). This isn't something the workflow can fix
-  for itself: ownership of `SOURCE_PATH` on the runner host must be
-  set to the runner's user out of band, before the first automated
-  deploy, the same way the `.env` file itself is provisioned ahead of
-  time.
+- **`SOURCE_PATH` must be group-writable by the runner container's
+  UID/GID.** `ionos-l1-docker` is a Docker container (image
+  `gallegovela-github-selfhosted-runners/deploy-docker-runner`) that
+  bind-mounts the host's `/var/www` straight through (no UID
+  remapping) and runs its process as `runner`, UID:GID `1001:1001`.
+  Bind mounts resolve permissions against that numeric host UID/GID,
+  so if `SOURCE_PATH` (or its `.git/config`) is `root`-owned with no
+  group/other write bit — e.g. it was seeded by an earlier manual
+  clone done as `root` — the container's `git -C "$SOURCE_PATH"
+  remote set-url` / `pull` can't lock `.git/config` and the step fails
+  with `error: could not lock config file .git/config: Permission
+  denied` (the incident reported in issue #13). This isn't something
+  the workflow can fix for itself: on the host, `SOURCE_PATH` must be
+  prepared out of band, before the first automated deploy, the same
+  way the `.env` file itself is provisioned ahead of time — owner
+  stays `root`, group set to the runner's GID with write access:
+  ```
+  chown -R root:1001 "$SOURCE_PATH"
+  chmod -R g+w "$SOURCE_PATH"
+  ```
 - **`db/` migrations are not run by this workflow.** Deployment only
   brings up the containers already defined in `docker-compose.yml`;
   applying pending migrations (`python db/migrate.py upgrade`, see
