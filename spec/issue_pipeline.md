@@ -38,21 +38,54 @@ the *current* stage without removing/re-adding the label.
   `outputs.allowed`, which every stage's `if:` checks alongside its own
   label condition.
 
-## Authentication for `preparation`/`implementation` — decided: the job's own `GITHUB_TOKEN`, over HTTPS
+## GitHub token authentication — decided: `GITHUB_TOKEN` set once, at workflow level
 
-Committing and pushing branch `issue-<n>` no longer unlocks a
-deployment SSH key via `.github/actions/setup-ssh-and-git`. Instead,
-each stage points `origin` at the HTTPS remote authenticated with the
-token GitHub Actions generates automatically for the job run
-(`github.token` / `secrets.GITHUB_TOKEN` — no secret to provision, no
-passphrase), then sets the commit identity, replacing the two things
-`setup-ssh-and-git` used to do:
+Two independent things need GitHub authentication in this workflow,
+not just one:
 
-```
-git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-git config user.name "Claude (automated)"
-git config user.email "noreply@anthropic.com"
-```
+1. **`git push`** in `preparation`/`implementation`: committing and
+   pushing branch `issue-<n>` no longer unlocks a deployment SSH key
+   via `.github/actions/setup-ssh-and-git`. Instead, the stage points
+   `origin` at the HTTPS remote authenticated with the token GitHub
+   Actions generates automatically for the job run (`github.token` /
+   `secrets.GITHUB_TOKEN` — no secret to provision, no passphrase),
+   then sets the commit identity, replacing the two things
+   `setup-ssh-and-git` used to do:
+
+   ```
+   git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+   git config user.name "Claude (automated)"
+   git config user.email "noreply@anthropic.com"
+   ```
+
+2. **`gh`**, called by every stage — either directly by a workflow
+   step (`check-permission`'s collaborator check, "Post result
+   comment") or by `claude` itself, inside the prompt's own `Bash(gh
+   issue view:*)` / `Bash(gh pr create:*)` tool calls
+   (`documentation`, `preparation`, `implementation` all re-read the
+   issue thread this way; `merge` opens the PR this way). `gh` reads
+   `GH_TOKEN`/`GITHUB_TOKEN` from the environment; if the step running
+   `claude` doesn't have it, `gh` fails inside the tool call the same
+   way it would on a bare shell.
+
+**Incident (issue #13):** `GITHUB_TOKEN` was only exported in the
+steps that call `git`/`gh` directly (`check-permission`, "Configure
+git remote and identity", `merge`'s "Run Claude", "Post result
+comment"), not in the "Run Claude" step of `documentation`,
+`preparation` and `implementation`. Since `claude` runs `gh issue
+view` as part of its own tool calls in those three stages, and that
+step had no token in its environment, `gh` had nothing to authenticate
+with and the stage failed before it could read the issue at all.
+
+**Fix — decided: declare `GITHUB_TOKEN: ${{ github.token }}` once, in
+the workflow-level `env:` block**, alongside `CLAUDE_CODE_OAUTH_TOKEN`.
+Every job and every step inherits it automatically, covering both uses
+above (`gh` auth and the git remote URL) without having to remember to
+repeat it per stage. The per-step declarations that existed only to
+work around the gap (`GH_TOKEN`/`GITHUB_TOKEN` re-declared in
+`check-permission`, "Configure git remote and identity", `merge`'s
+"Run Claude", "Post result comment") are removed as redundant now that
+the value is already in the environment from the workflow level.
 
 - **`permissions: contents: write`, up from `contents: read`.**
   Required for the default `GITHUB_TOKEN` to push at all; `read` was

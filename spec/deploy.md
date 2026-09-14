@@ -71,6 +71,18 @@ only knows how to check out into the ephemeral workspace.
   (`CLAUDE.md`, "Environment variables"), so it can't come from
   `git pull`/`git clone` — it must be provisioned on the server ahead
   of the first deploy, outside this workflow's responsibility.
+- **`SOURCE_PATH` must be owned by the runner's own user.** The flow
+  runs `git -C "$SOURCE_PATH" remote set-url` / `pull` as whichever
+  user `ionos-l1-docker`'s job runs as; if `SOURCE_PATH` (or its
+  `.git/config`) is owned by a different user — e.g. it was seeded by
+  an earlier manual clone done as another user — `git` cannot lock
+  `.git/config` to update it and the step fails with `error: could not
+  lock config file .git/config: Permission denied` (the incident
+  reported in issue #13). This isn't something the workflow can fix
+  for itself: ownership of `SOURCE_PATH` on the runner host must be
+  set to the runner's user out of band, before the first automated
+  deploy, the same way the `.env` file itself is provisioned ahead of
+  time.
 - **`db/` migrations are not run by this workflow.** Deployment only
   brings up the containers already defined in `docker-compose.yml`;
   applying pending migrations (`python db/migrate.py upgrade`, see
