@@ -18,7 +18,7 @@ server, no manual step. Implemented as a GitHub Actions workflow
 
 `on: push: branches: [main]`. Same criterion as
 `spec/testing.md`'s CI trigger: a change anywhere can require a
-rebuild, and `docker-compose build --no-cache` rebuilds the whole
+rebuild, and `docker compose build --no-cache` rebuilds the whole
 stack regardless of which files changed, so scoping the trigger to a
 subset of paths would only add complexity without saving work.
 
@@ -47,7 +47,7 @@ only knows how to check out into the ephemeral workspace.
 2. If it exists: `git -C "$SOURCE_PATH" pull`.
 3. If it doesn't: `git clone --branch main <repo-url> "$SOURCE_PATH"`.
 4. `cd "$SOURCE_PATH"` and run
-   `docker-compose down && docker-compose build --no-cache && docker-compose up -d`.
+   `docker compose down && docker compose build --no-cache && docker compose up -d`.
 
 ## Design notes
 
@@ -65,8 +65,16 @@ only knows how to check out into the ephemeral workspace.
   only needs read access to clone/pull; declaring it instead of
   relying on the repository's default permissions makes the
   requirement visible in the workflow file itself.
+- **`docker compose` (Compose V2 CLI plugin), not the standalone
+  `docker-compose` binary.** Consistent with the rest of the project
+  (`CLAUDE.md`'s "Common commands", `README.md`,
+  `control/frontend/README.md`, `spec/control/core.md`), which uses
+  `docker compose` throughout. The standalone `docker-compose` (V1)
+  binary is no longer installed by default on modern Docker
+  installations, so relying on it would require provisioning an
+  extra package on the `ionos-l1-docker` runner for no benefit.
 - **`.env` in `SOURCE_PATH` is assumed to already exist on the
-  server** and is left untouched by this flow. `docker-compose`
+  server** and is left untouched by this flow. `docker compose`
   needs it (production `DATABASE_URL`, etc.) and it's gitignored
   (`CLAUDE.md`, "Environment variables"), so it can't come from
   `git pull`/`git clone` — it must be provisioned on the server ahead
@@ -81,9 +89,9 @@ only knows how to check out into the ephemeral workspace.
   mid-flight (a cancelled run could leave the stack `down` with a
   build still in progress). `concurrency: group: deploy,
   cancel-in-progress: false` queues the second run instead.
-- **No rollback on build failure.** If `docker-compose build
+- **No rollback on build failure.** If `docker compose build
   --no-cache` fails, the stack stays down (already stopped by the
-  preceding `docker-compose down`) until the next successful push —
+  preceding `docker compose down`) until the next successful push —
   consistent with the project's existing "no retries" stance (e.g.
   `spec/ingest/STATIONS.md`), applied here to deploys instead of
   ingestion jobs.
