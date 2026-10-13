@@ -38,28 +38,41 @@ the *current* stage without removing/re-adding the label.
   `outputs.allowed`, which every stage's `if:` checks alongside its own
   label condition.
 
-## Authentication for `preparation`/`implementation` — decided: the job's own `GITHUB_TOKEN`, over HTTPS
+## Authentication for `preparation`/`implementation` — decided: the `GH_TOKEN` organization secret, over HTTPS
 
 Committing and pushing branch `issue-<n>` no longer unlocks a
 deployment SSH key via `.github/actions/setup-ssh-and-git`. Instead,
 each stage points `origin` at the HTTPS remote authenticated with the
-token GitHub Actions generates automatically for the job run
-(`github.token` / `secrets.GITHUB_TOKEN` — no secret to provision, no
-passphrase), then sets the commit identity, replacing the two things
-`setup-ssh-and-git` used to do:
+`GH_TOKEN` organization secret — a personal access token provisioned
+once at the organization level, not generated per job run — then sets
+the commit identity, replacing the two things `setup-ssh-and-git` used
+to do:
 
 ```
-git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 git config user.name "Claude (automated)"
 git config user.email "noreply@anthropic.com"
 ```
 
-- **`permissions: contents: write`, up from `contents: read`.**
-  Required for the default `GITHUB_TOKEN` to push at all; `read` was
-  enough while pushing relied on the SSH key's own access instead of
-  the token's scope. Declared at the workflow level (same as today),
-  so it also applies to `documentation`/`merge`, which don't need it
-  but aren't harmed by having it.
+- **Why not the job's own `github.token`/`GITHUB_TOKEN`.** Its
+  identity is a GitHub Actions App install that can never carry the
+  `workflows` permission, no matter how `permissions:` is set on the
+  workflow or the organization — a fixed platform restriction, not a
+  configuration gap. Any commit touching `.github/workflows/**` (e.g.
+  the `docker-compose` -> `docker compose` fix tracked by this same
+  issue) is rejected on push with "refusing to allow a GitHub App to
+  create or update workflow ... without `workflows` permission".
+  `GH_TOKEN` is a regular PAT, so it carries no such restriction — and
+  as a side effect, pushes to `issue-<n>` are made by a "normal"
+  identity again, so `tests.yml` goes back to triggering automatically
+  on them (`on: push`, no branch filter — see `spec/testing.md`).
+- **Scope of the change.** Only the "Configure git remote and
+  identity" step of `preparation`/`implementation` (the single step
+  that does `git push`) uses `GH_TOKEN`. `check-permission` and the
+  "Post result comment" step of all four stages, plus the whole
+  `merge` stage, keep using `github.token` for their `gh` calls
+  (commenting on the issue, opening the pull request) — none of those
+  need the `workflows` permission, and none have shown any problem.
 - **`.github/actions/setup-ssh-and-git` is retired.** No caller left in
   this repository once `preparation`/`implementation` stop using it
   (see `spec/deploy.md` for `deploy.yml`'s own, separate migration to
@@ -69,16 +82,4 @@ git config user.email "noreply@anthropic.com"
 
 ## Pending decisions
 
-- **`tests.yml` no longer runs automatically on `issue-<n>` pushes.**
-  Pushes/PRs authenticated with the default `GITHUB_TOKEN` don't
-  trigger other workflows (GitHub's own anti-recursion restriction).
-  Today, `preparation`/`implementation` push with the SSH key — a
-  "normal" identity — so those pushes to `issue-<n>` do trigger
-  `tests.yml` (`on: push`, no branch filter, see `spec/testing.md`).
-  Moving to `GITHUB_TOKEN` loses that automatic run until someone
-  triggers it manually or a PR is opened from outside the bot. This
-  doesn't block deployment (`deploy.yml` still triggers normally, since
-  the push to `main` at merge time is made by a human), but it is a CI
-  coverage regression, accepted knowingly for now: to be revisited
-  together with the separate, already-open issue about reworking these
-  tests, not solved here.
+None.
