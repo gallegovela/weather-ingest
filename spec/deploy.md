@@ -42,7 +42,7 @@ only knows how to check out into the ephemeral workspace.
 ## Flow — decided
 
 0. Point the repo URL at the HTTPS remote authenticated with the
-   job's own `GITHUB_TOKEN` (see "Design notes") — no key to unlock.
+   `GH_TOKEN` secret (see "Design notes") — no key to unlock.
 1. Check whether `SOURCE_PATH` exists (`test -d`).
 2. If it exists: `git -C "$SOURCE_PATH" pull`.
 3. If it doesn't: `git clone --branch main <repo-url> "$SOURCE_PATH"`.
@@ -51,20 +51,22 @@ only knows how to check out into the ephemeral workspace.
 
 ## Design notes
 
-- **`git` authentication on the runner — decided: the job's own
-  `GITHUB_TOKEN`, over HTTPS.** No SSH key, no `SSH_KEY_PASSPHRASE`
-  secret, no `.github/actions/setup-ssh-and-git`: `SOURCE_PATH` is
-  cloned/pulled from `https://x-access-token:${GITHUB_TOKEN}@github.com/<repo>.git`,
-  where `GITHUB_TOKEN` is the token GitHub Actions generates
-  automatically for each job run (`github.token` / `secrets.GITHUB_TOKEN`,
-  no provisioning needed). Replaces the previous design, which reused
-  `setup-ssh-and-git` (still used by `issue-pipeline.yml`'s
-  `preparation`/`implementation` stages — see `spec/issue_pipeline.md`
-  for that workflow's own migration to the same token-based approach).
-- **`permissions: contents: read`, declared explicitly.** The job
-  only needs read access to clone/pull; declaring it instead of
-  relying on the repository's default permissions makes the
-  requirement visible in the workflow file itself.
+- **`git` authentication on the runner — decided: the `GH_TOKEN`
+  secret, over HTTPS.** No SSH key, no `SSH_KEY_PASSPHRASE` secret, no
+  `.github/actions/setup-ssh-and-git`: `SOURCE_PATH` is cloned/pulled
+  from `https://x-access-token:${GH_TOKEN}@github.com/<repo>.git`,
+  where `GH_TOKEN` is an API token stored as a repository/organization
+  secret (`secrets.GH_TOKEN`), the same one `issue-pipeline.yml` uses
+  for every GitHub interaction (see `spec/issue_pipeline.md`, "GitHub
+  token authentication", for the token's required permissions — this
+  workflow only needs *Contents* read). Not the auto-generated
+  `github.token`. Note the remote URL, token included, is stored in
+  `SOURCE_PATH`'s `.git/config`, so rotating the secret is picked up on
+  the next deploy (the step re-runs `remote set-url` every time).
+- **`permissions: contents: read`, declared explicitly.** Only governs
+  the auto-generated `github.token`, which this workflow doesn't use
+  for git anymore; kept at the minimum and declared instead of relying
+  on the repository's default permissions.
 - **`.env` in `SOURCE_PATH` is assumed to already exist on the
   server** and is left untouched by this flow. `docker-compose`
   needs it (production `DATABASE_URL`, etc.) and it's gitignored

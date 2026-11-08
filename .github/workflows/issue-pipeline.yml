@@ -26,24 +26,26 @@ on:
   issue_comment:
     types: [created]
 
+# Only governs the auto-generated github.token, which nothing here uses
+# anymore (every GitHub call goes through GH_TOKEN below) -- kept at the
+# minimum.
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 env:
   # Org-level secret: a long-lived token from `claude setup-token`,
   # not a per-user OAuth browser session -- lets every job authenticate
   # without any interactive login step on the runner itself.
   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-  # The job's own auto-generated token. Set once here so every step in
-  # every job inherits it -- both `gh` (called directly by steps like
-  # check-permission/"Post result comment", and by `claude` itself
-  # inside its `gh issue view`/`gh pr create` tool calls) and the git
-  # remote URL in preparation/implementation need it. See
-  # spec/issue_pipeline.md ("GitHub token authentication") for the
-  # incident this fixes.
-  GITHUB_TOKEN: ${{ github.token }}
+  # GitHub API token, from the GH_TOKEN repository/organization secret
+  # (not the auto-generated github.token). Set once here so every step
+  # in every job inherits it -- `gh` reads it from the environment, both
+  # when called directly by steps like check-permission/"Post result
+  # comment" and by `claude` itself inside its `gh issue view`/`gh pr
+  # create` tool calls. git pushes use it via actions/checkout's
+  # `token:` input. See spec/issue_pipeline.md ("GitHub token
+  # authentication").
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
   check-permission:
@@ -69,6 +71,8 @@ jobs:
     runs-on: ionos-l1-claude
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Run Claude
         env:
@@ -92,11 +96,15 @@ jobs:
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'preparation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'preparation')))
     runs-on: ionos-l1-claude
     steps:
+      # `token:` makes checkout persist GH_TOKEN as the credential for
+      # every later git fetch/push on this checkout (instead of the
+      # default github.token).
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
 
-      - name: Configure git remote and identity
+      - name: Configure git identity
         run: |
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "Claude (automated)"
           git config user.email "noreply@anthropic.com"
 
@@ -136,10 +144,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: issue-${{ github.event.issue.number }}
+          token: ${{ secrets.GH_TOKEN }}
 
-      - name: Configure git remote and identity
+      - name: Configure git identity
         run: |
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "Claude (automated)"
           git config user.email "noreply@anthropic.com"
 
@@ -167,6 +175,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: issue-${{ github.event.issue.number }}
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Run Claude
         env:

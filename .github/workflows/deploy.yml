@@ -24,9 +24,9 @@ jobs:
       - name: Pull or clone the persistent checkout
         env:
           SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          REMOTE_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if [ -d "$SOURCE_PATH" ]; then
             git -C "$SOURCE_PATH" remote set-url origin "$REMOTE_URL"
             git -C "$SOURCE_PATH" pull
