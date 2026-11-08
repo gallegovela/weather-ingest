@@ -27,8 +27,8 @@ on:
     types: [created]
 
 # Only governs the auto-generated github.token, which nothing here uses
-# anymore (every GitHub call goes through GH_TOKEN below) -- kept at the
-# minimum.
+# anymore (every GitHub call goes through gh + GH_TOKEN, see below) --
+# kept at the minimum.
 permissions:
   contents: read
 
@@ -37,15 +37,14 @@ env:
   # not a per-user OAuth browser session -- lets every job authenticate
   # without any interactive login step on the runner itself.
   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-  # GitHub API token, from the GH_TOKEN repository/organization secret
-  # (not the auto-generated github.token). Set once here so every step
-  # in every job inherits it -- `gh` reads it from the environment, both
-  # when called directly by steps like check-permission/"Post result
-  # comment" and by `claude` itself inside its `gh issue view`/`gh pr
-  # create` tool calls. git pushes use it via actions/checkout's
-  # `token:` input. See spec/issue_pipeline.md ("GitHub token
-  # authentication").
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+# GitHub authentication (spec/issue_pipeline.md, "GitHub token
+# authentication"): every job declares GH_TOKEN in its own `env:` --
+# the variable `gh` reads.
+# Every interaction with GitHub goes through `gh` -- directly (gh api,
+# gh issue comment), inside `claude`'s own tool calls (gh issue view,
+# gh pr create), and for git itself via `gh auth git-credential` as
+# the checkout's credential helper (see "Configure git").
 
 jobs:
   check-permission:
@@ -53,6 +52,8 @@ jobs:
     # we lose its built-in write-access check -- added back here,
     # once, shared by every stage job via `needs`.
     runs-on: ionos-l1-claude
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     outputs:
       allowed: ${{ steps.check.outputs.allowed }}
     steps:
@@ -69,10 +70,13 @@ jobs:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'documentation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'documentation')))
     runs-on: ionos-l1-claude
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
 
       - name: Run Claude
         env:
@@ -95,16 +99,23 @@ jobs:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'preparation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'preparation')))
     runs-on: ionos-l1-claude
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
-      # `token:` makes checkout persist GH_TOKEN as the credential for
-      # every later git fetch/push on this checkout (instead of the
-      # default github.token).
+      # persist-credentials: false -- otherwise checkout leaves its own
+      # extraheader credential in .git/config, which would take
+      # precedence over gh's credential helper below.
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
 
-      - name: Configure git identity
+      # Same helper `gh auth setup-git` would install, but scoped to
+      # this checkout (--local) instead of the runner's global config.
+      - name: Configure git
         run: |
+          git config --local credential.https://github.com.helper ''
+          git config --local --add credential.https://github.com.helper '!gh auth git-credential'
           git config user.name "Claude (automated)"
           git config user.email "noreply@anthropic.com"
 
@@ -140,14 +151,19 @@ jobs:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'implementation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'implementation')))
     runs-on: ionos-l1-claude
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: issue-${{ github.event.issue.number }}
           token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
 
-      - name: Configure git identity
+      - name: Configure git
         run: |
+          git config --local credential.https://github.com.helper ''
+          git config --local --add credential.https://github.com.helper '!gh auth git-credential'
           git config user.name "Claude (automated)"
           git config user.email "noreply@anthropic.com"
 
@@ -171,11 +187,19 @@ jobs:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'merge') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'merge')))
     runs-on: ionos-l1-claude
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: issue-${{ github.event.issue.number }}
           token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
+
+      - name: Configure git
+        run: |
+          git config --local credential.https://github.com.helper ''
+          git config --local --add credential.https://github.com.helper '!gh auth git-credential'
 
       - name: Run Claude
         env:

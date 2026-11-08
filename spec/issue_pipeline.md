@@ -38,58 +38,63 @@ the *current* stage without removing/re-adding the label.
   `outputs.allowed`, which every stage's `if:` checks alongside its own
   label condition.
 
-## GitHub token authentication — decided: `GH_TOKEN` secret, set once at workflow level
+## GitHub token authentication — decided: `GH_TOKEN` per job, every GitHub call through `gh`
 
-Every interaction with GitHub in this workflow — git pushes, issue
-comments, PR creation, API calls — authenticates with an API token
-stored in the **`GH_TOKEN` repository/organization secret**
-(`secrets.GH_TOKEN`), not with the token GitHub Actions generates
-automatically for each run (`github.token` / `secrets.GITHUB_TOKEN`).
-The secret name can't start with `GITHUB_` (reserved by GitHub).
+Every interaction with GitHub in this workflow — git fetch/push, issue
+comments, PR creation, API calls — goes through **`gh`**, authenticated
+with an API token stored in the **`GH_TOKEN` repository/organization
+secret** (`secrets.GH_TOKEN`), not with the token GitHub Actions
+generates automatically for each run (`github.token` /
+`secrets.GITHUB_TOKEN`).
 
-Two independent things need it:
+**Declared in every job's own `env:`** (`check-permission` and the four
+stages), not at workflow level:
 
-1. **`git push`** in `preparation`/`implementation`: every
-   `actions/checkout` step passes `token: ${{ secrets.GH_TOKEN }}`, so
-   checkout persists that token as the credential for every later git
-   fetch/push on the checkout (instead of the default `github.token`,
-   which checkout would otherwise persist and which would take
-   precedence over credentials embedded in a remote URL). No `git
-   remote set-url` is needed anymore; the stage only sets the commit
-   identity:
+```
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+```
+
+`GH_TOKEN` is the variable `gh` reads, so no other variable is needed.
+Every step in the job inherits it, so no step needs to re-declare it.
+
+How each kind of interaction uses it:
+
+1. **`gh` directly** — `check-permission`'s `gh api` collaborator
+   check and every stage's "Post result comment" (`gh issue comment`).
+2. **`gh` inside `claude`'s tool calls** — `Bash(gh issue view:*)` in
+   every stage, `Bash(gh pr create:*)` in `merge`. These run in the
+   "Run Claude" step's environment, which inherits the job's `env:`.
+3. **git, via `gh` as credential helper** — `actions/checkout` does the
+   initial fetch with `token: ${{ secrets.GH_TOKEN }}` and
+   `persist-credentials: false` (otherwise it leaves its own
+   `extraheader` credential in `.git/config`, which would take
+   precedence over the helper). Then, in every stage that runs git
+   afterwards (`preparation`, `implementation`, `merge`), a "Configure
+   git" step installs the same helper `gh auth setup-git` would, but
+   scoped to the checkout (`--local`) instead of the self-hosted
+   runner's global config:
 
    ```
+   git config --local credential.https://github.com.helper ''
+   git config --local --add credential.https://github.com.helper '!gh auth git-credential'
    git config user.name "Claude (automated)"
    git config user.email "noreply@anthropic.com"
    ```
 
-   `documentation`/`merge` pass the same `token:` for consistency,
-   even though they don't push.
+   The empty first entry resets any helper inherited from global
+   config. Every later `git fetch`/`git push` (including `claude`'s own
+   `Bash(git *)` calls) asks `gh` for credentials, which answers with
+   `GH_TOKEN`. `documentation` doesn't run git after checkout, so it
+   skips this step.
 
-2. **`gh`**, called by every stage — either directly by a workflow
-   step (`check-permission`'s collaborator check, "Post result
-   comment") or by `claude` itself, inside the prompt's own `Bash(gh
-   issue view:*)` / `Bash(gh pr create:*)` tool calls
-   (`documentation`, `preparation`, `implementation` all re-read the
-   issue thread this way; `merge` opens the PR this way). `gh` reads
-   `GH_TOKEN` from the environment (it takes precedence over
-   `GITHUB_TOKEN`); if the step running `claude` doesn't have it, `gh`
-   fails inside the tool call the same way it would on a bare shell.
-
-**Declared once, in the workflow-level `env:` block**
-(`GH_TOKEN: ${{ secrets.GH_TOKEN }}`), alongside
-`CLAUDE_CODE_OAUTH_TOKEN`, so every job and every step inherits it
-without having to remember to repeat it per stage.
-
-**Incident (issue #13), why it's workflow-level:** the token used to be
-exported only in the steps that call `git`/`gh` directly
-(`check-permission`, "Configure git remote and identity", `merge`'s
-"Run Claude", "Post result comment"), not in the "Run Claude" step of
-`documentation`, `preparation` and `implementation`. Since `claude`
-runs `gh issue view` as part of its own tool calls in those three
-stages, and that step had no token in its environment, `gh` had nothing
-to authenticate with and the stage failed before it could read the
-issue at all.
+**Incident (issue #13), why every job declares it:** the token used to
+be exported only in the steps that call `git`/`gh` directly, not in the
+"Run Claude" step of `documentation`, `preparation` and
+`implementation`. Since `claude` runs `gh issue view` as part of its
+own tool calls, that step had no token in its environment and the stage
+failed before it could read the issue at all. Declaring it at job level
+covers every step of every job.
 
 - **Required token permissions.** Fine-grained token scoped to this
   repository: *Contents* read/write (push `issue-<n>`), *Issues*
@@ -104,7 +109,7 @@ issue at all.
   token.
 - **`.github/actions/setup-ssh-and-git` is retired.** No caller left in
   this repository (see `spec/deploy.md` for `deploy.yml`'s own
-  migration to the same `GH_TOKEN` secret).
+  migration to the same `GH_TOKEN` secret and `gh`-based access).
 - **`tests.yml` runs again on `issue-<n>` pushes.** Pushes/PRs
   authenticated with the default `github.token` don't trigger other
   workflows (GitHub's anti-recursion restriction), which was a known

@@ -41,31 +41,37 @@ only knows how to check out into the ephemeral workspace.
 
 ## Flow — decided
 
-0. Point the repo URL at the HTTPS remote authenticated with the
-   `GH_TOKEN` secret (see "Design notes") — no key to unlock.
 1. Check whether `SOURCE_PATH` exists (`test -d`).
-2. If it exists: `git -C "$SOURCE_PATH" pull`.
-3. If it doesn't: `git clone --branch main <repo-url> "$SOURCE_PATH"`.
+2. If it exists: reset `origin` to the plain HTTPS URL
+   (`https://github.com/<repo>.git`, no token) and `git pull` with
+   `gh auth git-credential` as a one-off credential helper (`git -c`,
+   see "Design notes").
+3. If it doesn't: `gh repo clone <repo> "$SOURCE_PATH" -- --branch main`.
 4. `cd "$SOURCE_PATH"` and run
    `docker-compose down && docker-compose build --no-cache && docker-compose up -d`.
 
 ## Design notes
 
-- **`git` authentication on the runner — decided: the `GH_TOKEN`
-  secret, over HTTPS.** No SSH key, no `SSH_KEY_PASSPHRASE` secret, no
-  `.github/actions/setup-ssh-and-git`: `SOURCE_PATH` is cloned/pulled
-  from `https://x-access-token:${GH_TOKEN}@github.com/<repo>.git`,
-  where `GH_TOKEN` is an API token stored as a repository/organization
-  secret (`secrets.GH_TOKEN`), the same one `issue-pipeline.yml` uses
-  for every GitHub interaction (see `spec/issue_pipeline.md`, "GitHub
-  token authentication", for the token's required permissions — this
-  workflow only needs *Contents* read). Not the auto-generated
-  `github.token`. Note the remote URL, token included, is stored in
-  `SOURCE_PATH`'s `.git/config`, so rotating the secret is picked up on
-  the next deploy (the step re-runs `remote set-url` every time).
+- **GitHub access on the runner — decided: through `gh`, with the
+  `GH_TOKEN` secret.** No SSH key, no `SSH_KEY_PASSPHRASE` secret, no
+  `.github/actions/setup-ssh-and-git`, no token embedded in the remote
+  URL. The `deploy` job declares, in its own `env:`,
+  `GH_TOKEN: ${{ secrets.GH_TOKEN }}` (the variable `gh` reads) —
+  same convention as `issue-pipeline.yml` (see `spec/issue_pipeline.md`, "GitHub token authentication", for
+  the token's required permissions; this workflow only needs
+  *Contents* read). The first run clones with `gh repo clone`; later
+  runs `git pull` with
+  `-c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!gh auth git-credential'`,
+  so the helper applies only to that command and nothing is persisted
+  in `SOURCE_PATH`'s `.git/config` or the runner's global config. Each
+  run also resets `origin` to the plain URL, which removes the token
+  an earlier version of this workflow left embedded in it.
+- **`gh` must be installed in the `ionos-l1-docker` runner image.** It
+  wasn't needed before (plain `git` + token URL); unlike
+  `ionos-l1-claude`, which already uses it.
 - **`permissions: contents: read`, declared explicitly.** Only governs
   the auto-generated `github.token`, which this workflow doesn't use
-  for git anymore; kept at the minimum and declared instead of relying
+  anymore; kept at the minimum and declared instead of relying
   on the repository's default permissions.
 - **`.env` in `SOURCE_PATH` is assumed to already exist on the
   server** and is left untouched by this flow. `docker-compose`

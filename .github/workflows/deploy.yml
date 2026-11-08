@@ -20,18 +20,26 @@ concurrency:
 jobs:
   deploy:
     runs-on: ionos-l1-docker
+    # GH_TOKEN: the variable `gh` reads (spec/deploy.md, "Design notes").
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
+      # All GitHub access goes through gh: `gh repo clone` on the first
+      # run, and `gh auth git-credential` as a one-off credential helper
+      # (`git -c`, nothing persisted) for later pulls. The remote URL
+      # carries no token, so none is left in SOURCE_PATH's .git/config.
       - name: Pull or clone the persistent checkout
         env:
           SOURCE_PATH: ${{ secrets.SOURCE_PATH }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if [ -d "$SOURCE_PATH" ]; then
-            git -C "$SOURCE_PATH" remote set-url origin "$REMOTE_URL"
-            git -C "$SOURCE_PATH" pull
+            git -C "$SOURCE_PATH" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            git -C "$SOURCE_PATH" \
+              -c credential.https://github.com.helper= \
+              -c 'credential.https://github.com.helper=!gh auth git-credential' \
+              pull
           else
-            git clone --branch main "$REMOTE_URL" "$SOURCE_PATH"
+            gh repo clone "$GITHUB_REPOSITORY" "$SOURCE_PATH" -- --branch main
           fi
 
       - name: Rebuild and restart the stack
