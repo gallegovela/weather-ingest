@@ -55,6 +55,7 @@ def list_stations(
     created_at_to: date | None = None,
     updated_at_from: date | None = None,
     updated_at_to: date | None = None,
+    has_daily_values: bool | None = None,
     user: CurrentUser = Depends(get_current_user),
     conn: Connection = Depends(get_db),
 ):
@@ -75,6 +76,7 @@ def list_stations(
         "created_at_to": created_at_to,
         "updated_at_from": updated_at_from,
         "updated_at_to": updated_at_to,
+        "has_daily_values": has_daily_values,
     }
     rows, total = service.list_stations(conn, page, page_size, filters)
     return Page(

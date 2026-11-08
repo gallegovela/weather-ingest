@@ -31,6 +31,7 @@ def _to_value_out(row: tuple) -> ClimatologicalValueOut:
         humidity_min, humidity_min_time,
         precipitation_intensity_max, precipitation_intensity_max_time,
         created_at, updated_at,
+        temperature_range, max_temperature_diff_prev_day, min_temperature_diff_prev_day,
     ) = row
     return ClimatologicalValueOut(
         station_code=station_code, name=name, province=province, date=value_date,
@@ -48,6 +49,9 @@ def _to_value_out(row: tuple) -> ClimatologicalValueOut:
         precipitation_intensity_max=precipitation_intensity_max,
         precipitation_intensity_max_time=precipitation_intensity_max_time,
         created_at=created_at, updated_at=updated_at,
+        temperature_range=temperature_range,
+        max_temperature_diff_prev_day=max_temperature_diff_prev_day,
+        min_temperature_diff_prev_day=min_temperature_diff_prev_day,
     )
 
 

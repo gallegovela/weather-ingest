@@ -1,7 +1,8 @@
 """DAO layer of the climatological_values module: the single access
 point to the climatological_values table, joined with stations for
-display (see spec/control/core.md, "Layered architecture"). Plain SQL
-with psycopg v3, no ORM, same criteria as ingest/.
+display, and left-joined with climatological_metrics for the three
+metrics columns (see spec/control/core.md, "Layered architecture").
+Plain SQL with psycopg v3, no ORM, same criteria as ingest/.
 
 Read-only module (spec/control/module/climatological_values.md): no
 insert/update/delete here, that's ingest/daily_values.py's job.
@@ -47,12 +48,21 @@ _COLUMNS = """
     cv.humidity_mean, cv.humidity_max, cv.humidity_max_time,
     cv.humidity_min, cv.humidity_min_time,
     cv.precipitation_intensity_max, cv.precipitation_intensity_max_time,
-    cv.created_at, cv.updated_at
+    cv.created_at, cv.updated_at,
+    cm.temperature_range, cm.max_temperature_diff_prev_day, cm.min_temperature_diff_prev_day
 """
 
-# INNER JOIN, not LEFT: station_code is a NOT NULL FK to stations (see
-# spec/db/tables.md), so every row is guaranteed a match.
-_FROM = "FROM climatological_values cv JOIN stations s ON s.station_code = cv.station_code"
+# INNER JOIN with stations, not LEFT: station_code is a NOT NULL FK to
+# stations (see spec/db/tables.md), so every row is guaranteed a
+# match. LEFT JOIN with climatological_metrics, since a day may not
+# have a metrics row yet if the metrics job hasn't run for it (see
+# spec/control/module/climatological_values.md, "Data").
+_FROM = """
+    FROM climatological_values cv
+    JOIN stations s ON s.station_code = cv.station_code
+    LEFT JOIN climatological_metrics cm
+        ON cm.station_code = cv.station_code AND cm.date = cv.date
+"""
 
 
 def _build_where(filters: dict) -> tuple[str, dict]:

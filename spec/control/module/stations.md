@@ -120,7 +120,9 @@ Follows the layered architecture from `core.md`:
   climatological_values GROUP BY station_code` subquery (`LEFT`, not
   `INNER`, so a station with zero imported values still shows `0`
   instead of being dropped from the listing) — not a second query per
-  row, one join covering the whole page.
+  row, one join covering the whole page. The `has_daily_values` filter
+  (see "Endpoints" below) is a `HAVING count(*) > 0` /
+  `HAVING count(*) = 0` on that same subquery, not a separate query.
 - **Service** (`service.py`): validates the received filter/pagination
   parameters and delegates to the DAO; contains no additional business
   logic beyond that, since it's a read-only module.
@@ -133,10 +135,18 @@ Following the contract set in `core.md`:
 - `GET /api/stations/stations` — paginated, filtered listing
   (`page`, `page_size` parameters, and one per filterable field per
   the cross-cutting convention). Each item now also includes
-  `daily_values_count` (see "Data" above) — **not** itself a
-  filterable field (decided): it's a display convenience, not a column
-  on `stations`, and filtering "stations with more than N values
-  imported" isn't a need that's come up.
+  `daily_values_count` (see "Data" above).
+- **`has_daily_values` filter — decided.** Optional boolean query
+  parameter: `true` restricts the listing to stations with
+  `daily_values_count > 0`, `false` to stations with
+  `daily_values_count = 0`; omitted, no restriction (current
+  behavior). A boolean flag, not a full min/max range filter like the
+  other numeric columns (decided): the only real need so far is
+  telling "has at least one value imported" from "has none" — e.g.
+  `jobs`'s "Metrics" station picker (see
+  [`spec/control/module/jobs.md`](./jobs.md)) needs exactly that to
+  only offer stations worth computing metrics for — not "more than N"
+  for an arbitrary `N`, which would be unused complexity.
 - **The map reuses the same endpoint, without pagination — decided.**
   With `page`/`page_size` omitted (or a value returning every row),
   the map requests the full set of stations at once: with ~921

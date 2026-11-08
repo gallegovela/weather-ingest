@@ -135,6 +135,16 @@ subitem/screen here.
   the same limit keeps one job's range from growing unbounded and
   keeps this screen consistent with "Daily values" rather than
   inventing a second limit for no real benefit.
+- **Station picker scoped to stations with data already imported —
+  decided.** Unlike "Daily values"'s picker, which must offer every
+  station (that's precisely how a station gets its first data
+  imported), this picker calls `GET
+  /api/stations/stations?has_daily_values=true` (see
+  [`spec/control/module/stations.md`](./stations.md)) instead of the
+  unfiltered endpoint: metrics are derived *from* daily values (see
+  [`spec/ingest/METRICS.md`](../../ingest/METRICS.md)), so a station
+  with none imported yet has nothing to compute and would just queue a
+  job that finds zero days to process.
 - **No overlap warning — decided**, unlike "Daily values": overlap
   there matters because it means re-fetching/overwriting AEMET data;
   here, re-running a `metrics` job for an already-computed range is

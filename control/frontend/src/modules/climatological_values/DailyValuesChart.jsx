@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Rectangle } from "recharts";
 
+import { listMetrics } from "../metrics/metricsApi";
 import { listStations } from "../stations/stationsApi";
 import {
   getClimatologicalValuesMonthlyCounts,
@@ -135,31 +136,54 @@ export function DailyValuesChart() {
     enabled: !!dateFrom && !!dateTo,
   });
 
+  // Reuses the metrics module's endpoint for the two charts below --
+  // no new endpoint needed (spec/control/module/climatological_values.md,
+  // "Daily values chart"). A day with no climatological_metrics row yet
+  // (metrics job hasn't run for it) just won't be in `items`, same as
+  // any other gap below.
+  const { data: monthMetrics, isError: isMonthMetricsError } = useQuery({
+    queryKey: ["metrics", "month-values", stationCode, dateFrom, dateTo],
+    queryFn: () => listMetrics({ station_code: stationCode, date_from: dateFrom, date_to: dateTo, page_size: 31 }),
+    enabled: !!dateFrom && !!dateTo,
+  });
+
+  const metricsByDate = useMemo(() => {
+    const map = new Map();
+    for (const m of monthMetrics?.items ?? []) map.set(m.date, m);
+    return map;
+  }, [monthMetrics]);
+
   const chartData = useMemo(() => {
     const items = monthValues?.items ?? [];
     return items
       .slice()
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map((v) => ({
-        day: v.date.slice(-2),
-        mean_temperature: toNumber(v.mean_temperature),
-        max_temperature: toNumber(v.max_temperature),
-        min_temperature: toNumber(v.min_temperature),
-        min_temperature_time: minutesSinceMidnight(v.min_temperature_time),
-        max_temperature_time: minutesSinceMidnight(v.max_temperature_time),
-        sunshine_hours: toNumber(v.sunshine_hours),
-        precipitation_mm: toNumber(v.precipitation_mm),
-        precipitation_sentinel:
-          v.precipitation_raw === "Ip" || v.precipitation_raw === "Acum"
-            ? PRECIPITATION_SENTINEL_MARKER
-            : null,
-        humidity_max: toNumber(v.humidity_max),
-        humidity_min: toNumber(v.humidity_min),
-        humidity_max_time: minutesSinceMidnight(v.humidity_max_time),
-        humidity_min_time: minutesSinceMidnight(v.humidity_min_time),
-        wind_mean_speed: toNumber(v.wind_mean_speed),
-      }));
-  }, [monthValues]);
+      .map((v) => {
+        const metric = metricsByDate.get(v.date);
+        return {
+          day: v.date.slice(-2),
+          mean_temperature: toNumber(v.mean_temperature),
+          max_temperature: toNumber(v.max_temperature),
+          min_temperature: toNumber(v.min_temperature),
+          min_temperature_time: minutesSinceMidnight(v.min_temperature_time),
+          max_temperature_time: minutesSinceMidnight(v.max_temperature_time),
+          sunshine_hours: toNumber(v.sunshine_hours),
+          precipitation_mm: toNumber(v.precipitation_mm),
+          precipitation_sentinel:
+            v.precipitation_raw === "Ip" || v.precipitation_raw === "Acum"
+              ? PRECIPITATION_SENTINEL_MARKER
+              : null,
+          humidity_max: toNumber(v.humidity_max),
+          humidity_min: toNumber(v.humidity_min),
+          humidity_max_time: minutesSinceMidnight(v.humidity_max_time),
+          humidity_min_time: minutesSinceMidnight(v.humidity_min_time),
+          wind_mean_speed: toNumber(v.wind_mean_speed),
+          temperature_range: toNumber(metric?.temperature_range),
+          max_temperature_diff_prev_day: toNumber(metric?.max_temperature_diff_prev_day),
+          min_temperature_diff_prev_day: toNumber(metric?.min_temperature_diff_prev_day),
+        };
+      });
+  }, [monthValues, metricsByDate]);
 
   const hasPrecipitationSentinel = chartData.some((d) => d.precipitation_sentinel !== null);
 
@@ -347,6 +371,36 @@ export function DailyValuesChart() {
                   dataKey="day"
                   connectNulls={false}
                   series={[{ name: "wind_mean_speed", label: "Vel. media (m/s)", color: "grape.6" }]}
+                />
+              </Stack>
+
+              {isMonthMetricsError && (
+                <Alert color="red">No se han podido cargar las métricas del mes.</Alert>
+              )}
+
+              <Stack gap="xs">
+                <Title order={4}>Rango térmico diario</Title>
+                <LineChart
+                  h={220}
+                  data={chartData}
+                  dataKey="day"
+                  connectNulls={false}
+                  series={[{ name: "temperature_range", label: "Amplitud térmica (°C)", color: "violet.6" }]}
+                />
+              </Stack>
+
+              <Stack gap="xs">
+                <Title order={4}>Diferencia de temperatura respecto al día anterior</Title>
+                <LineChart
+                  h={220}
+                  data={chartData}
+                  dataKey="day"
+                  connectNulls={false}
+                  withLegend
+                  series={[
+                    { name: "max_temperature_diff_prev_day", label: "Dif. temp. máx. (°C)", color: "red.6" },
+                    { name: "min_temperature_diff_prev_day", label: "Dif. temp. mín. (°C)", color: "blue.6" },
+                  ]}
                 />
               </Stack>
             </>

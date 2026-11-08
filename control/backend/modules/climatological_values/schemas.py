@@ -2,7 +2,10 @@
 
 See spec/control/module/climatological_values.md and spec/db/tables.md
 (climatological_values table). name/province are joined from stations,
-not native columns.
+not native columns. temperature_range/max_temperature_diff_prev_day/
+min_temperature_diff_prev_day are left-joined from
+climatological_metrics, `None` when the metrics job hasn't produced a
+row for that day yet.
 """
 
 from datetime import date, datetime
@@ -41,3 +44,6 @@ class ClimatologicalValueOut(BaseModel):
     precipitation_intensity_max_time: str | None
     created_at: datetime
     updated_at: datetime
+    temperature_range: Decimal | None
+    max_temperature_diff_prev_day: Decimal | None
+    min_temperature_diff_prev_day: Decimal | None

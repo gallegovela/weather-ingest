@@ -62,9 +62,12 @@ export function Metrics() {
     },
   });
 
+  // Scoped to stations with data already imported (spec/control/module/
+  // jobs.md): computing metrics for a station with no daily values has
+  // nothing to process, unlike "Daily values"'s picker.
   const { data: stationsPage } = useQuery({
-    queryKey: ["stations", "picker"],
-    queryFn: () => listStations({ page_size: STATIONS_PAGE_SIZE }),
+    queryKey: ["stations", "picker", "has-daily-values"],
+    queryFn: () => listStations({ page_size: STATIONS_PAGE_SIZE, has_daily_values: true }),
   });
   const stationOptions = (stationsPage?.items ?? []).map((station) => ({
     value: station.station_code,
