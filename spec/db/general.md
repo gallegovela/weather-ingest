@@ -54,7 +54,7 @@ variables needed by this module:
 
 | Variable       | Description                                              | Example                                              |
 |----------------|-----------------------------------------------------------|-------------------------------------------------------|
-| `DATABASE_URL` | PostgreSQL connection string used by Alembic and by the app | `postgresql+psycopg://weather:******@localhost:5432/weather` |
+| `DATABASE_URL` | PostgreSQL connection string used by Alembic and by the app | `postgresql+psycopg://weather:******@localhost:15432/weather` |
 
 **Note on the URL scheme:** `postgresql+psycopg://` is used (not
 plain `postgresql://`). SQLAlchemy picks `psycopg2` by default for
@@ -193,3 +193,13 @@ There's no production server yet.
   `control/backend/` and `control/frontend/` (see
   [`spec/control/core.md`](../control/core.md)), not an externally
   managed service (RDS, Cloud SQL, etc.).
+- **Host port:** the `postgres` service in `docker-compose.yml`
+  publishes its port to the host as `15432` instead of the default
+  `5432`, because `5432` is already taken on the host by another,
+  unrelated service. This only changes the host:container port
+  mapping (`"15432:5432"`); internal docker-compose network traffic
+  from `control-backend` and `ingest-worker` to `postgres` keeps using
+  the container's `5432` through the `postgres` service name, so it's
+  unaffected. The same applies in production, since
+  [`spec/deploy.md`](../deploy.md) deploys the same
+  `docker-compose.yml` on the target server.
