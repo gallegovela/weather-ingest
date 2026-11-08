@@ -59,6 +59,13 @@ def _build_where(filters: dict) -> tuple[str, dict]:
             conditions.append(f"stations.{field} <= %({field}_to)s")
             params[f"{field}_to"] = to_value
 
+    # has_daily_values filter (spec/control/module/stations.md): a
+    # boolean flag on the same dv.daily_values_count already computed
+    # in _COLUMNS/_FROM, not a separate query.
+    has_daily_values = filters.get("has_daily_values")
+    if has_daily_values is not None:
+        conditions.append(f"coalesce(dv.daily_values_count, 0) {'> 0' if has_daily_values else '= 0'}")
+
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     return where, params
 

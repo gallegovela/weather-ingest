@@ -44,6 +44,12 @@ export const VALUE_FIELDS = [
   { key: "precipitation_intensity_max_time", label: "Hora intensidad máx.", filterType: "text", priority: 4 },
   { key: "created_at", label: "Fecha de alta", filterType: "date_range", priority: 5, format: formatDateTime },
   { key: "updated_at", label: "Última actualización", filterType: "date_range", priority: 5, format: formatDateTime },
+  // Left-joined from climatological_metrics, not filterable here --
+  // decided in spec/control/module/climatological_values.md: the
+  // dedicated `metrics` listing already covers filtering by these.
+  { key: "temperature_range", label: "Amplitud térmica (°C)", priority: 3 },
+  { key: "max_temperature_diff_prev_day", label: "Dif. temp. máx. día anterior (°C)", priority: 3 },
+  { key: "min_temperature_diff_prev_day", label: "Dif. temp. mín. día anterior (°C)", priority: 3 },
 ];
 
 export const ALWAYS_VISIBLE_FIELDS = VALUE_FIELDS.filter((f) => f.priority === 0);
