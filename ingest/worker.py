@@ -11,7 +11,9 @@ with:
 import logging
 import time
 
-from ingest import daily_values, db, stations
+from psycopg.types.json import Jsonb
+
+from ingest import daily_values, db, metrics, stations
 
 log = logging.getLogger("ingest.worker")
 
@@ -22,6 +24,15 @@ log = logging.getLogger("ingest.worker")
 JOB_HANDLERS = {
     "stations": stations.run_import,
     "daily_values": daily_values.run_import,
+    "metrics": metrics.run_import,
+}
+
+# job_type -> job_type: when a job of the key's type finishes with
+# success, a new job of the value's type is queued (not executed
+# inline, see "Exactly one job per loop iteration") with the same
+# params (spec/ingest/general.md, "Automatic follow-up job").
+AUTO_FOLLOWUP = {
+    "daily_values": "metrics",
 }
 
 _CLAIM_SQL = """
@@ -38,7 +49,8 @@ _CLAIM_SQL = """
 
 _SUCCESS_SQL = """
     UPDATE ingest_jobs
-    SET status = 'success', finished_at = now(), rows_inserted = %(rows_inserted)s, rows_updated = %(rows_updated)s
+    SET status = 'success', finished_at = now(), rows_inserted = %(rows_inserted)s,
+        rows_updated = %(rows_updated)s, result = %(result)s
     WHERE id = %(id)s
 """
 
@@ -46,6 +58,10 @@ _ERROR_SQL = """
     UPDATE ingest_jobs
     SET status = 'error', finished_at = now(), error_message = %(error_message)s
     WHERE id = %(id)s
+"""
+
+_QUEUE_SQL = """
+    INSERT INTO ingest_jobs (job_type, params) VALUES (%(job_type)s, %(params)s)
 """
 
 
@@ -70,10 +86,17 @@ def _run_job(job_id: int, job_type: str, params: dict) -> None:
         _mark_error(job_id, str(exc))
         return
 
+    job_result = getattr(result, "result", None)
     with db.connect() as conn, conn.cursor() as cur:
         cur.execute(_SUCCESS_SQL, {
             "id": job_id, "rows_inserted": result.inserted, "rows_updated": result.updated,
+            "result": Jsonb(job_result) if job_result is not None else None,
         })
+
+        followup_type = AUTO_FOLLOWUP.get(job_type)
+        if followup_type is not None:
+            cur.execute(_QUEUE_SQL, {"job_type": followup_type, "params": Jsonb(params)})
+
         conn.commit()
     log.info("Job %d (%s) succeeded: %s", job_id, job_type, result)
 

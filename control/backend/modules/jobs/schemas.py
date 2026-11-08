@@ -20,9 +20,16 @@ class JobOut(BaseModel):
     rows_inserted: int | None
     rows_updated: int | None
     error_message: str | None
+    result: dict | None
 
 
 class DailyValuesJobCreate(BaseModel):
+    station_code: str
+    date_from: date
+    date_to: date
+
+
+class MetricsJobCreate(BaseModel):
     station_code: str
     date_from: date
     date_to: date

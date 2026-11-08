@@ -24,6 +24,7 @@ const MODULES = [
           { label: "Mapa", to: "/stations/map" },
           { label: "Valores Diarios", to: "/climatological-values/values" },
           { label: "Gráfico Valores Diarios", to: "/climatological-values/chart" },
+          { label: "Métricas", to: "/metrics/values" },
         ],
       },
     ],
@@ -37,6 +38,7 @@ const MODULES = [
     items: [
       { label: "Estaciones", to: "/jobs/stations" },
       { label: "Valores diarios", to: "/jobs/daily-values" },
+      { label: "Métricas", to: "/jobs/metrics" },
     ],
   },
   {

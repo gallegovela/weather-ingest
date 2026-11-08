@@ -15,9 +15,12 @@ def create_stations_job(conn: Connection) -> tuple:
     return dao.create_job(conn, "stations", {})
 
 
-def create_daily_values_job(
-    conn: Connection, station_code: str, date_from: date, date_to: date
+def _queue_dated_job(
+    conn: Connection, job_type: str, station_code: str, date_from: date, date_to: date
 ) -> tuple:
+    # Shared by daily_values and metrics (spec/control/module/jobs.md,
+    # "Metrics": "same form ... same validation ... same
+    # SCHEDULER_MAX_DATE_RANGE limit" as daily_values).
     if date_from > date_to:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "La fecha de inicio no puede ser posterior a la de fin"
@@ -35,7 +38,19 @@ def create_daily_values_job(
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
     }
-    return dao.create_job(conn, "daily_values", params)
+    return dao.create_job(conn, job_type, params)
+
+
+def create_daily_values_job(
+    conn: Connection, station_code: str, date_from: date, date_to: date
+) -> tuple:
+    return _queue_dated_job(conn, "daily_values", station_code, date_from, date_to)
+
+
+def create_metrics_job(
+    conn: Connection, station_code: str, date_from: date, date_to: date
+) -> tuple:
+    return _queue_dated_job(conn, "metrics", station_code, date_from, date_to)
 
 
 def list_jobs(

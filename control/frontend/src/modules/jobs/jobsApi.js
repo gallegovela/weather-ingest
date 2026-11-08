@@ -41,3 +41,19 @@ export function cancelDailyValuesJob(id) {
 export function deleteDailyValuesJobs(ids) {
   return apiClient.delete("/jobs/daily-values", { ids });
 }
+
+export function createMetricsJob(data) {
+  return apiClient.post("/jobs/metrics", data);
+}
+
+export function listMetricsJobs(params) {
+  return apiClient.get(`/jobs/metrics?${toQueryString(params)}`);
+}
+
+export function cancelMetricsJob(id) {
+  return apiClient.post(`/jobs/metrics/${id}/cancel`);
+}
+
+export function deleteMetricsJobs(ids) {
+  return apiClient.delete("/jobs/metrics", { ids });
+}

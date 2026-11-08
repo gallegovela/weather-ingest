@@ -39,7 +39,7 @@ def test_create_daily_values_job_accepts_valid_range(monkeypatch):
     def fake_create_job(conn, job_type, params):
         captured["job_type"] = job_type
         captured["params"] = params
-        return (1, job_type, params, "pending", None, None, None, None, None, None)
+        return (1, job_type, params, "pending", None, None, None, None, None, None, None)
 
     monkeypatch.setattr(dao, "create_job", fake_create_job)
 
@@ -48,6 +48,47 @@ def test_create_daily_values_job_accepts_valid_range(monkeypatch):
     )
 
     assert captured["job_type"] == "daily_values"
+    assert captured["params"] == {
+        "station_code": "3195", "date_from": "2024-04-01", "date_to": "2024-04-05",
+    }
+
+
+def test_create_metrics_job_rejects_date_from_after_date_to():
+    with pytest.raises(HTTPException) as exc_info:
+        service.create_metrics_job(
+            conn=None, station_code="3195", date_from=date(2024, 4, 5), date_to=date(2024, 4, 1)
+        )
+    assert exc_info.value.status_code == 400
+
+
+def test_create_metrics_job_rejects_range_over_max(monkeypatch):
+    monkeypatch.setattr(dao, "get_config_value", lambda conn, key: "180")
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.create_metrics_job(
+            conn=None, station_code="3195", date_from=date(2020, 1, 1), date_to=date(2024, 1, 1)
+        )
+    assert exc_info.value.status_code == 400
+    assert "180" in exc_info.value.detail
+
+
+def test_create_metrics_job_accepts_valid_range(monkeypatch):
+    monkeypatch.setattr(dao, "get_config_value", lambda conn, key: "180")
+
+    captured = {}
+
+    def fake_create_job(conn, job_type, params):
+        captured["job_type"] = job_type
+        captured["params"] = params
+        return (1, job_type, params, "pending", None, None, None, None, None, None, None)
+
+    monkeypatch.setattr(dao, "create_job", fake_create_job)
+
+    service.create_metrics_job(
+        conn=None, station_code="3195", date_from=date(2024, 4, 1), date_to=date(2024, 4, 5)
+    )
+
+    assert captured["job_type"] == "metrics"
     assert captured["params"] == {
         "station_code": "3195", "date_from": "2024-04-01", "date_to": "2024-04-05",
     }
