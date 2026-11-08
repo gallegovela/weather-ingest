@@ -11,6 +11,10 @@ on:
 jobs:
   ingest-tests:
     runs-on: ubuntu-latest
+    # Never connected to: ingest/config.py requires DATABASE_URL at
+    # import time, and there's no .env in CI (spec/testing.md).
+    env:
+      DATABASE_URL: postgresql+psycopg://unused:unused@localhost:1/unused
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

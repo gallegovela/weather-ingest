@@ -106,6 +106,11 @@ tests (a real Postgres, not mocked), the deliberate exceptions to
   project. No `services:` Postgres container here — these stay
   DB-free, mocked/monkeypatched DAOs and pure transform functions (see
   "Scope" above).
+- **`ingest-tests` sets a dummy `DATABASE_URL`** (never connected to).
+  `ingest/config.py` raises at import time if it's missing, and every
+  `ingest/` module under test imports it through `ingest/db.py`;
+  locally the project root's `.env` provides it, but CI has no `.env`,
+  so without it test collection fails before any test runs.
 - **A separate job per module for integration tests, with a Postgres
   service — decided.** `ingest-integration-tests`: brings up a
   `postgres:16` service (same image as `docker-compose.yml`), installs
