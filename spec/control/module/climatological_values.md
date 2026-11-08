@@ -39,6 +39,16 @@ from AEMET:
   table itself doesn't store those (see `spec/db/tables.md`, "Design
   notes": deliberately not duplicated), so this listing is the one
   place in the panel that joins the two.
+- **Also left-joined with `climatological_metrics`** by
+  (`station_code`, `date`) to additionally show `temperature_range`,
+  `max_temperature_diff_prev_day`, `min_temperature_diff_prev_day`
+  (see [`metrics`](./metrics.md) and `spec/db/tables.md`). A `LEFT
+  JOIN`, not an inner one, because the composite FK only guarantees a
+  metrics row can't exist for a day with no `climatological_values`
+  row — not the other way around: a day may still have no metrics row
+  if the `metrics` job hasn't run for it yet, in which case the three
+  columns come back `NULL`, same treatment as any other missing value
+  in this listing.
 - **Filter per field — decided, all 27 columns**, following the
   cross-cutting convention set in `core.md` ("Paginated listings with
   filters"):
@@ -62,11 +72,19 @@ from AEMET:
     already covers filtering by name/province if that's the starting
     point. Adding a second, redundant path to the same filter isn't
     worth the DAO complexity of filtering across the join.
+  - `temperature_range`, `max_temperature_diff_prev_day`,
+    `min_temperature_diff_prev_day` (joined from
+    `climatological_metrics`) are **not** filterable here either, same
+    decision and reasoning as `name`/`province`: the dedicated
+    `metrics` listing (see `spec/control/module/metrics.md`) already
+    covers filtering by these, so a second filtering path to the same
+    data isn't duplicated here.
 - **Responsive columns with expandable row — decided, reused from
   `stations`.** With 27+ columns this is essential, not optional here:
   same pattern as `spec/control/module/stations.md` ("Station list"),
   `station_code`/`name`/`province`/`date` kept always visible, the
-  rest hidden/revealed by width same as there.
+  rest — including the three joined `climatological_metrics` columns —
+  hidden/revealed by width same as there.
 - **Incoming station filter — decided.** Reachable with
   `station_code` pre-applied as a filter via a query string parameter
   (`?station_code=<code>`), read once on mount to seed the filter's
@@ -126,13 +144,25 @@ from AEMET:
     `humidity_max_time`, `humidity_min_time`, same minutes-since-
     midnight conversion as the temperature extreme times above.
   - **Viento**: line chart, 1 series — `wind_mean_speed`.
+  - **Rango térmico diario**: line chart, 1 series —
+    `temperature_range`, from `climatological_metrics` (see
+    [`metrics`](./metrics.md) and `spec/db/tables.md`), for the same
+    station/month already selected.
+  - **Diferencia de temperatura respecto al día anterior**: line
+    chart, 2 series — `max_temperature_diff_prev_day`,
+    `min_temperature_diff_prev_day`, also from
+    `climatological_metrics`.
   - **Gaps — decided, applies to every series above:** any `NULL`/
     missing value, and any `*_time` value that isn't `HH:MM` (e.g.
     `"Varias"`, see `spec/db/tables.md`), is rendered as a **gap** in
     its chart (a null point, not interpolated and not shown as zero).
     This includes the precipitation columns: a day with no numeric
     `precipitation_mm` and no `Ip`/`Acum` sentinel is a gap in both
-    series.
+    series. It also includes the two `climatological_metrics` charts
+    above: a `NULL` value — whether because the source
+    `climatological_values` day is incomplete, or because the
+    `metrics` job hasn't run for that day yet, so there's no
+    `climatological_metrics` row at all — is a gap, same criterion.
 
 ## Data
 
@@ -140,14 +170,17 @@ Follows the layered architecture from `core.md`:
 
 - **DAO** (`control/backend/modules/climatological_values/dao.py`):
   `SELECT` on `climatological_values` **joined with** `stations` (for
-  `name`/`province`), with pagination and the received filters, in
-  plain SQL (`psycopg` v3, no ORM). Read-only: no insert/update/delete
-  here, that's `ingest/daily_values.py`'s job (see
-  `spec/ingest/DAILY_VALUES.md`). Also adds the two aggregation queries
-  needed by the "Daily values chart" screen (distinct years and
-  monthly counts for a station, see below), both filtering on
-  `station_code` and grouping on `date`, using the existing composite
-  primary key (`station_code`, `date`) — no extra index needed.
+  `name`/`province`) and **left-joined with** `climatological_metrics`
+  (for `temperature_range`, `max_temperature_diff_prev_day`,
+  `min_temperature_diff_prev_day`) by (`station_code`, `date`), with
+  pagination and the received filters, in plain SQL (`psycopg` v3, no
+  ORM). Read-only: no insert/update/delete here, that's
+  `ingest/daily_values.py`'s job (see `spec/ingest/DAILY_VALUES.md`).
+  Also adds the two aggregation queries needed by the "Daily values
+  chart" screen (distinct years and monthly counts for a station, see
+  below), both filtering on `station_code` and grouping on `date`,
+  using the existing composite primary key (`station_code`, `date`) —
+  no extra index needed.
 - **Service** (`service.py`): validates filter/pagination parameters
   and delegates to the DAO; no other business logic, same criteria as
   `stations`.
@@ -161,12 +194,15 @@ Following the contract set in `core.md`:
   listing (`page`, `page_size`, and one query parameter per filterable
   field listed above, plus `station_code` for the incoming-filter
   link). Each item includes the joined `name`/`province` alongside
-  every native column. Also reused (unpaginated, or with `page_size`
-  large enough to cover a month) by the "Daily values chart" screen to
-  fetch a selected month's daily rows for its charts, filtering by
-  `station_code` plus a `date_from`/`date_to` range spanning that
-  month — no new endpoint needed for this, same reuse criterion
-  `jobs.md` already applies for its overlap check.
+  every native column, plus the left-joined `temperature_range`,
+  `max_temperature_diff_prev_day`, `min_temperature_diff_prev_day`
+  (`null` when the `metrics` job hasn't produced a row for that day).
+  Also reused (unpaginated, or with `page_size` large enough to cover
+  a month) by the "Daily values chart" screen to fetch a selected
+  month's daily rows for its charts, filtering by `station_code` plus
+  a `date_from`/`date_to` range spanning that month — no new endpoint
+  needed for this, same reuse criterion `jobs.md` already applies for
+  its overlap check.
 - `GET /api/climatological-values/years?station_code=...` — distinct
   years with at least one imported row for that station, descending.
   Feeds the chart screen's year selector.
@@ -174,6 +210,13 @@ Following the contract set in `core.md`:
   — one row count per month (12 values) of `climatological_values` for
   that station/year. Feeds chart 1 (monthly counts bar chart) on the
   chart screen.
+- The "Daily values chart" screen's two `climatological_metrics`
+  charts ("Rango térmico diario", "Diferencia de temperatura respecto
+  al día anterior") reuse the existing `GET /api/metrics/values`
+  endpoint (see [`metrics`](./metrics.md)), filtering by
+  `station_code` plus the same `date_from`/`date_to` range spanning
+  the selected month — no new endpoint needed, same reuse criterion as
+  the values endpoint above.
 
 ## Pending decisions
 
