@@ -69,6 +69,8 @@ control/             # Control panel (SPA + API). See spec/control/.
         └── modules/      # A module = a folder (security, stations, ...),
                           # with its own screens and its <module>Api.js.
 spec/                # Project specification (see above).
+.claude/agents/      # Agents used by the issue pipeline (architect,
+                     # developer). See spec/issue_pipeline.md.
 docker-compose.yml   # Local development PostgreSQL.
 .env                 # Environment variables (not versioned).
 ```

@@ -6,15 +6,22 @@ name: Issue pipeline
 # organization secret) -- not the anthropics/claude-code-action
 # marketplace action, which would need a redundant second auth path,
 # and not an interactive login on the runner host either (the token is
-# supplied per-run, nothing persists on the runner). See the design
-# doc for the full rationale (labels vs. Project Status, tool scoping
-# per stage, why check-permission exists).
+# supplied per-run, nothing persists on the runner). See
+# spec/issue_pipeline.md for the full rationale.
 #
-# documentation  -> propose a spec/ change plan, comment it. No writes.
-# preparation    -> create/reuse branch issue-<n>, apply the spec/
-#                   changes, commit, push.
-# implementation -> on branch issue-<n>, implement the code, commit, push.
-# merge          -> open a PR from issue-<n> to the default branch.
+# documentation  -> architect agent proposes a spec/ change plan,
+#                   commented on the issue. No writes.
+# preparation    -> create/reuse branch issue-<n>, architect agent
+#                   applies the spec/ changes, workflow commits, pushes.
+# implementation -> on branch issue-<n>, developer agent implements the
+#                   code, workflow commits, pushes.
+# merge          -> plain bash (no agent): open a PR from issue-<n> to
+#                   the default branch.
+#
+# Agents (prompt, model, tools) live in .claude/agents/, not here.
+# Agents never talk to GitHub: every GitHub interaction is a workflow
+# step running gh, and GH_TOKEN is only declared on those steps, never
+# on the "Run Claude" ones.
 #
 # Re-triggers on a comment too (not just a fresh label), so answering
 # a clarifying question in the thread re-runs the *current* label's
@@ -27,8 +34,7 @@ on:
     types: [created]
 
 # Only governs the auto-generated github.token, which nothing here uses
-# anymore (every GitHub call goes through gh + GH_TOKEN, see below) --
-# kept at the minimum.
+# (every GitHub call goes through gh + GH_TOKEN) -- kept at the minimum.
 permissions:
   contents: read
 
@@ -37,14 +43,7 @@ env:
   # not a per-user OAuth browser session -- lets every job authenticate
   # without any interactive login step on the runner itself.
   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-# GitHub authentication (spec/issue_pipeline.md, "GitHub token
-# authentication"): every job declares GH_TOKEN in its own `env:` --
-# the variable `gh` reads.
-# Every interaction with GitHub goes through `gh` -- directly (gh api,
-# gh issue comment), inside `claude`'s own tool calls (gh issue view,
-# gh pr create), and for git itself via `gh auth git-credential` as
-# the checkout's credential helper (see "Configure git").
+  ISSUE_NUMBER: ${{ github.event.issue.number }}
 
 jobs:
   check-permission:
@@ -52,12 +51,12 @@ jobs:
     # we lose its built-in write-access check -- added back here,
     # once, shared by every stage job via `needs`.
     runs-on: ionos-l1-claude
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     outputs:
       allowed: ${{ steps.check.outputs.allowed }}
     steps:
       - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           perm=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${{ github.actor }}/permission" --jq .permission)
           if [ "$perm" = "admin" ] || [ "$perm" = "write" ]; then
@@ -70,41 +69,54 @@ jobs:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'documentation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'documentation')))
     runs-on: ionos-l1-claude
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GH_TOKEN }}
           persist-credentials: false
 
-      - name: Run Claude
+      # Saved outside the checkout so it can never end up committed.
+      - name: Fetch issue thread
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          PROMPT="Review CLAUDE.md in full before anything else. Analyze issue #$ISSUE_NUMBER and its entire comment thread (gh issue view $ISSUE_NUMBER --comments). Your only responsibility in this stage is to propose a concrete action plan for the spec/ changes needed to resolve the issue, following the conventions and workflow documented in CLAUDE.md and spec/. Do not modify any file: this stage is analysis and proposal only. Reply in the same language the issue and its comments are written in."
-          claude -p "$PROMPT" \
+          gh issue view "$ISSUE_NUMBER" > "$RUNNER_TEMP/issue.md"
+          gh issue view "$ISSUE_NUMBER" --comments >> "$RUNNER_TEMP/issue.md"
+
+      - name: Run Claude
+        run: |
+          set -o pipefail
+          claude -p "Stage: documentation. Issue #$ISSUE_NUMBER. The issue and its full comment thread are in $RUNNER_TEMP/issue.md." \
+            --agent architect \
+            --disallowedTools "Write Edit" \
             --dangerously-skip-permissions \
-            --allowedTools "Read Grep Glob Bash(gh issue view:*)" \
             --output-format text \
             --max-budget-usd 2 \
-            | tee /tmp/claude_output.txt
+            | tee "$RUNNER_TEMP/claude_output.txt"
+
+      - name: Check no files were modified
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::documentation must not modify files"
+            git status --porcelain
+            exit 1
+          fi
 
       - name: Post result comment
         if: always()
-        run: gh issue comment "${{ github.event.issue.number }}" --body-file /tmp/claude_output.txt
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/claude_output.txt"
 
   preparation:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'preparation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'preparation')))
     runs-on: ionos-l1-claude
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       # persist-credentials: false -- otherwise checkout leaves its own
       # extraheader credential in .git/config, which would take
-      # precedence over gh's credential helper below.
+      # precedence over gh's credential helper below (and which the
+      # agent could use).
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GH_TOKEN }}
@@ -112,6 +124,7 @@ jobs:
 
       # Same helper `gh auth setup-git` would install, but scoped to
       # this checkout (--local) instead of the runner's global config.
+      # It only works in steps that have GH_TOKEN in their env.
       - name: Configure git
         run: |
           git config --local credential.https://github.com.helper ''
@@ -121,7 +134,7 @@ jobs:
 
       - name: Create or reuse the issue branch
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           BRANCH="issue-$ISSUE_NUMBER"
           git fetch origin "$BRANCH" 2>/dev/null || true
@@ -131,28 +144,51 @@ jobs:
             git checkout -b "$BRANCH"
           fi
 
-      - name: Run Claude
+      - name: Fetch issue thread
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          PROMPT="Review CLAUDE.md in full before anything else. You are on branch issue-$ISSUE_NUMBER. Re-read issue #$ISSUE_NUMBER and its entire thread (gh issue view $ISSUE_NUMBER --comments), including the action plan already proposed in an earlier comment. Your only responsibility in this stage is to apply those changes to spec/, following the project's conventions. When done, commit and push branch issue-$ISSUE_NUMBER. Do not touch code outside spec/ in this stage. Reply in the same language the issue and its comments are written in."
-          claude -p "$PROMPT" \
+          gh issue view "$ISSUE_NUMBER" > "$RUNNER_TEMP/issue.md"
+          gh issue view "$ISSUE_NUMBER" --comments >> "$RUNNER_TEMP/issue.md"
+
+      - name: Run Claude
+        run: |
+          set -o pipefail
+          claude -p "Stage: preparation. Issue #$ISSUE_NUMBER, branch issue-$ISSUE_NUMBER. The issue and its full comment thread are in $RUNNER_TEMP/issue.md." \
+            --agent architect \
             --dangerously-skip-permissions \
-            --allowedTools "Read Write Edit Grep Glob Bash(git *) Bash(gh issue view:*)" \
             --output-format text \
             --max-budget-usd 4 \
-            | tee /tmp/claude_output.txt
+            | tee "$RUNNER_TEMP/claude_output.txt"
+
+      - name: Commit and push spec/ changes
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          outside=$(git diff --cached --name-only | grep -v '^spec/' || true)
+          if [ -n "$outside" ]; then
+            echo "::error::preparation must only change spec/, found:"
+            echo "$outside"
+            exit 1
+          fi
+          git commit -m "Update spec for #$ISSUE_NUMBER (automated)"
+          git push -u origin "issue-$ISSUE_NUMBER"
 
       - name: Post result comment
         if: always()
-        run: gh issue comment "${{ github.event.issue.number }}" --body-file /tmp/claude_output.txt
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/claude_output.txt"
 
   implementation:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'implementation') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'implementation')))
     runs-on: ionos-l1-claude
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -167,52 +203,86 @@ jobs:
           git config user.name "Claude (automated)"
           git config user.email "noreply@anthropic.com"
 
-      - name: Run Claude
+      - name: Fetch issue thread
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          PROMPT="Review CLAUDE.md in full before anything else. You are on branch issue-$ISSUE_NUMBER, which already has the spec/ changes for issue #$ISSUE_NUMBER applied. Re-read the issue and its entire thread (gh issue view $ISSUE_NUMBER --comments). Your only responsibility in this stage is to implement the code that fulfills that spec, following the order set in CLAUDE.md (db -> ingest -> backend -> frontend, as applicable to the change). When done, commit and push branch issue-$ISSUE_NUMBER. Reply in the same language the issue and its comments are written in."
-          claude -p "$PROMPT" \
+          gh issue view "$ISSUE_NUMBER" > "$RUNNER_TEMP/issue.md"
+          gh issue view "$ISSUE_NUMBER" --comments >> "$RUNNER_TEMP/issue.md"
+
+      - name: Run Claude
+        run: |
+          set -o pipefail
+          claude -p "Stage: implementation. Issue #$ISSUE_NUMBER, branch issue-$ISSUE_NUMBER. The issue and its full comment thread are in $RUNNER_TEMP/issue.md." \
+            --agent developer \
             --dangerously-skip-permissions \
-            --allowedTools "Read Write Edit Grep Glob Bash(git *) Bash(gh issue view:*)" \
             --output-format text \
             --max-budget-usd 8 \
-            | tee /tmp/claude_output.txt
+            | tee "$RUNNER_TEMP/claude_output.txt"
+
+      - name: Commit and push
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Implement #$ISSUE_NUMBER (automated)"
+          git push origin "issue-$ISSUE_NUMBER"
 
       - name: Post result comment
         if: always()
-        run: gh issue comment "${{ github.event.issue.number }}" --body-file /tmp/claude_output.txt
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/claude_output.txt"
 
+  # No agent and no checkout: everything goes through the API (GH_REPO
+  # tells gh which repository). See spec/issue_pipeline.md ("merge
+  # stage").
   merge:
     needs: check-permission
     if: needs.check-permission.outputs.allowed == 'true' && ((github.event_name == 'issues' && github.event.label.name == 'merge') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'merge')))
     runs-on: ionos-l1-claude
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: issue-${{ github.event.issue.number }}
-          token: ${{ secrets.GH_TOKEN }}
-          persist-credentials: false
-
-      - name: Configure git
-        run: |
-          git config --local credential.https://github.com.helper ''
-          git config --local --add credential.https://github.com.helper '!gh auth git-credential'
-
-      - name: Run Claude
+      - name: Open pull request
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          PROMPT="You are on branch issue-$ISSUE_NUMBER. Your only responsibility in this stage is to open a Pull Request from this branch against the repository's default branch, summarizing in the title and description the changes made for issue #$ISSUE_NUMBER (gh issue view $ISSUE_NUMBER --comments for full context). Use gh pr create. Reply in the same language the issue and its comments are written in."
-          claude -p "$PROMPT" \
-            --dangerously-skip-permissions \
-            --allowedTools "Read Bash(git *) Bash(gh pr create:*) Bash(gh issue view:*)" \
-            --output-format text \
-            --max-budget-usd 2 \
-            | tee /tmp/claude_output.txt
+          set -euo pipefail
+          BRANCH="issue-$ISSUE_NUMBER"
+          BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+
+          existing=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "A pull request from \`$BRANCH\` is already open: $existing" > "$RUNNER_TEMP/result.md"
+            exit 0
+          fi
+
+          TITLE=$(gh issue view "$ISSUE_NUMBER" --json title --jq .title)
+          COMMITS=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$BRANCH" \
+            --jq '.commits[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"')
+          {
+            echo "Closes #$ISSUE_NUMBER"
+            echo
+            echo "## Commits"
+            echo
+            echo "$COMMITS"
+          } > "$RUNNER_TEMP/pr_body.md"
+
+          url=$(gh pr create --base "$BASE" --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/pr_body.md")
+          echo "Pull request opened: $url" > "$RUNNER_TEMP/result.md"
 
       - name: Post result comment
         if: always()
-        run: gh issue comment "${{ github.event.issue.number }}" --body-file /tmp/claude_output.txt
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/result.md" ]; then
+            echo "The merge stage failed, see $RUN_URL" > "$RUNNER_TEMP/result.md"
+          fi
+          gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/result.md"
