@@ -7,11 +7,12 @@ the rest of the project's code and docs, is in English).
 ## Objective
 
 Let an authenticated user queue ingestion runs for any of the
-project's ingestion scripts — currently the station inventory import,
-and, once implemented, the daily climatological values import by
-station and date range — from the control panel, and follow their
-status, without running scripts by hand or accessing the database
-directly.
+project's ingestion scripts — the station inventory import, the daily
+climatological values import by station and date range, and the
+metrics derived from those values (see
+[`spec/ingest/METRICS.md`](../../ingest/METRICS.md)) — from the
+control panel, and follow their status, without running scripts by
+hand or accessing the database directly.
 
 Jobs are queued **on demand, whenever the user wants**, with whatever
 parameters they choose each time — **not** on a periodic/cron
@@ -28,6 +29,9 @@ structure" in `core.md`), with **one subitem per ingestion script**
 1. **Stations** — queue a station inventory import.
 2. **Daily values** — queue a daily climatological values import for a
    station and date range.
+3. **Metrics** — queue the metrics derived from daily values (see
+   [`spec/ingest/METRICS.md`](../../ingest/METRICS.md)) for a station
+   and date range.
 
 **Unlike other modules**, where subitems are different views of the
 same functional area (e.g. `stations` → List/Map over the same data),
@@ -121,6 +125,36 @@ subitem/screen here.
   job" below), and the same selection + **Delete selected** action
   (see "Deleting jobs" below).
 
+### 3. Metrics
+
+- Same form as "Daily values" above: **Station** picker and **Date
+  from**/**Date to** fields, same validation (`date_from <=
+  date_to`) and the same `SCHEDULER_MAX_DATE_RANGE` limit/split
+  warning — a `metrics` job's own range isn't bounded by AEMET (see
+  `spec/ingest/METRICS.md`, it doesn't call AEMET at all), but reusing
+  the same limit keeps one job's range from growing unbounded and
+  keeps this screen consistent with "Daily values" rather than
+  inventing a second limit for no real benefit.
+- **No overlap warning — decided**, unlike "Daily values": overlap
+  there matters because it means re-fetching/overwriting AEMET data;
+  here, re-running a `metrics` job for an already-computed range is
+  just a routine recalculation (e.g. after re-importing daily values),
+  not something the user needs to be warned about.
+- **Queue import** button creates an `ingest_jobs` row with `job_type
+  = 'metrics'` and `params = {"station_code": ..., "date_from": ...,
+  "date_to": ...}`.
+- Same **history list** pattern as the other two screens, filtered to
+  `job_type = 'metrics'`, plus a filter by `station_code`, the same
+  per-row **Cancel** action on `pending` jobs, and the same selection +
+  **Delete selected** action. Each row additionally shows the
+  **rainy days** result (`ingest_jobs.result`, see
+  `spec/db/tables.md`) once the job finishes with `success`.
+- **Rows queued automatically also appear here — decided.** A
+  `metrics` job queued automatically after a successful `daily_values`
+  run (see `spec/ingest/general.md`) is a normal row in `ingest_jobs`
+  like any other; this screen's history list doesn't distinguish a
+  manually-queued row from an automatically-queued one.
+
 ## Cancelling a job
 
 - **Decided: a `pending` job can be cancelled; a `running` one can't.**
@@ -196,6 +230,14 @@ internally.
   jobs, filterable by `status`, `created_at` range and `station_code`.
 - `POST /api/jobs/daily-values/{id}/cancel` — cancel a `pending` daily
   values job. Same `400` behavior as above.
+- `POST /api/jobs/metrics` — queue a metrics job. Body:
+  `{"station_code", "date_from", "date_to"}`.
+- `GET /api/jobs/metrics` — paginated history of metrics jobs,
+  filterable by `status`, `created_at` range and `station_code`; each
+  item includes `result` (`{"rainy_days": N}` once finished, see
+  `spec/db/tables.md`).
+- `POST /api/jobs/metrics/{id}/cancel` — cancel a `pending` metrics
+  job. Same `400` behavior as above.
 - **`POST .../cancel`, not `DELETE`** — decided: the row isn't removed
   (a cancelled job is kept as history, `spec/db/tables.md`), only its
   `status` changes, so this is an action/state-transition endpoint
@@ -205,6 +247,7 @@ internally.
   given stations jobs. Works the same for a single id (`{"ids": [1]}`)
   — see "Deleting jobs" above, "one action for one or many".
 - `DELETE /api/jobs/daily-values` — same, for daily values jobs.
+- `DELETE /api/jobs/metrics` — same, for metrics jobs.
 - **`DELETE` with a body, scoped per job type** — decided: this one
   *is* a real deletion, so `DELETE` is the right verb (contrast with
   `.../cancel` above); a body carrying a list of ids is used instead
