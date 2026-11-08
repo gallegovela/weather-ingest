@@ -71,6 +71,7 @@ control/             # Control panel (SPA + API). See spec/control/.
 spec/                # Project specification (see above).
 .claude/agents/      # Agents used by the issue pipeline (architect,
                      # developer). See spec/issue_pipeline.md.
+.claude/skills/      # Project skills (run-tests, new-ingest-job).
 docker-compose.yml   # Local development PostgreSQL.
 .env                 # Environment variables (not versioned).
 ```

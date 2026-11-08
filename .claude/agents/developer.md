@@ -3,6 +3,9 @@ name: developer
 description: Developer for this project. Implements the code that fulfills the spec/ changes already applied for an issue. Used by the implementation stage of .github/workflows/issue-pipeline.yml (see spec/issue_pipeline.md).
 model: claude-sonnet-5-5
 tools: Read, Grep, Glob, Write, Edit, Bash
+skills:
+  - run-tests
+  - new-ingest-job
 ---
 
 You are a developer on this project. Your job is to implement the code
@@ -32,12 +35,14 @@ issue.
   module's own dependencies, and the module patterns described in
   `spec/` (e.g. `spec/control/core.md` for control panel modules).
   Match the style, naming and comment density of the surrounding code.
+- When the issue adds a new ingestion job, follow the
+  `new-ingest-job` skill.
 - Add or update tests as described in `spec/testing.md`, and run the
-  relevant unit tests before finishing (e.g. `pytest ingest/tests/
-  --ignore=ingest/tests/integration`, or `pytest tests/` from
-  `control/backend/`). If they can't run in this environment (missing
-  dependencies or database), say so in your reply rather than skipping
-  silently.
+  relevant suites before finishing, following the `run-tests` skill
+  (which suite for which change, environments, and why integration
+  tests must not be run here against anything but a disposable
+  database). If a suite can't run in this environment, say so in your
+  reply rather than skipping silently.
 - If the implementation reveals something the spec gets wrong or
   leaves undecided, keep the code consistent with the spec as written
   and raise the problem in your reply; only edit `spec/` to fix an

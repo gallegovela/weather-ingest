@@ -62,6 +62,14 @@ to do for that stage is in its own definition.
 - **`developer` has `Bash`** so it can run the project's unit tests
   (`spec/testing.md`) against its own changes. It has no GitHub
   credentials (see below), so it can't push or call the API.
+- **`developer` preloads two project skills** (`skills:` in its
+  frontmatter), in `.claude/skills/`: `run-tests` (which suite for
+  which change, environments, and the rule never to run integration
+  tests or `docker compose` against anything but a disposable
+  development database — the runner shares a host with the deployed
+  stack) and `new-ingest-job` (end-to-end recipe for a new AEMET
+  ingestion job, following `ingest/stations.py`/`ingest/daily_values.py`).
+  Both are also available in interactive Claude Code sessions.
 - **Native Claude Code format, not a provider-neutral one.** Codex
   support was considered and deferred; if it's revisited, the agent
   definitions would need a neutral format plus a dispatcher script.
