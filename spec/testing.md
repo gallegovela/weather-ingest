@@ -31,6 +31,11 @@ Concrete first candidates:
 - `control/backend/modules/jobs/`'s (once implemented) validation:
   `date_from <= date_to` and the `SCHEDULER_MAX_DATE_RANGE` check —
   see `spec/control/module/jobs.md`.
+- `ingest/metrics.py`'s (once implemented) pure calculations: the
+  day-over-day temperature differences (including the "no previous
+  day row" → `NULL` case) and the rainy-day classification
+  (`precipitation_mm > 0` or `precipitation_raw = 'Ip'`, excluding
+  `Acum`) — see `spec/ingest/METRICS.md`.
 
 **Why not more yet:** integration tests (DAO layers against a real
 Postgres, FastAPI `TestClient`, frontend component tests) need

@@ -200,6 +200,68 @@ Natural key: `station_code` + `date`.
   existing composite primary key (`station_code`, `date`), so no
   additional index is needed for them.
 
+## Table `climatological_metrics`
+
+Stores metrics derived **from** `climatological_values` (not fetched
+from AEMET directly), fed by the ingestion process described in
+[`spec/ingest/METRICS.md`](../ingest/METRICS.md): the daily
+temperature range and the day-over-day temperature differences. The
+third metric requested alongside these two (total rainy days in an
+imported period) isn't a per-day fact and isn't stored here — see
+`spec/ingest/METRICS.md`, "Data source and granularity".
+
+Natural key: `station_code` + `date`, same as `climatological_values`,
+of which this table is a derived, one-to-one extension (a composite
+foreign key to `climatological_values (station_code, date)` enforces
+that a metrics row can't exist for a day with no imported values).
+
+| Column                           | Type        | Null | Description                                                                 |
+|-----------------------------------|-------------|------|--------------------------------------------------------------------------------|
+| `station_code`                    | `varchar`   | No   | Foreign key to `climatological_values.station_code` (composite FK, see above). |
+| `date`                             | `date`      | No   | Day this row's metrics are for. Foreign key to `climatological_values.date` (composite FK, see above). |
+| `temperature_range`                | `decimal`   | Yes  | That day's temperature amplitude (`max_temperature - min_temperature`). `NULL` when either source value is missing. |
+| `max_temperature_diff_prev_day`    | `decimal`   | Yes  | Difference between this day's `max_temperature` and the immediately previous day's. `NULL` when either value is missing, including when the previous day has no `climatological_values` row at all. |
+| `min_temperature_diff_prev_day`    | `decimal`   | Yes  | Same as above, for `min_temperature`.                                        |
+| `created_at`                       | `timestamp` | No   | Date/time this row was first inserted.                                        |
+| `updated_at`                       | `timestamp` | No   | Date/time this row was last updated.                                          |
+
+### Design notes
+
+- **Composite natural key (`station_code`, `date`), mirroring
+  `climatological_values`**: same criterion as that table — the data
+  is already uniquely identified by station and day, one row per
+  station per day, so there's no need for a technical `id`.
+- **Derived table, not an AEMET import**: unlike every other table fed
+  by `ingest/`, this one's source is internal
+  (`climatological_values`), not an AEMET endpoint — see
+  `spec/ingest/METRICS.md` for how/when it's computed. The audit
+  columns (`created_at`/`updated_at`) follow the same criteria as the
+  rest of the project regardless of the source being internal.
+- **`NULL` on missing source data, same "gap" criterion as the daily
+  values chart**: a metric whose calculation needs a value that's
+  missing (either `NULL` in `climatological_values`, or, for the
+  day-over-day differences, a previous day with no row at all) is
+  `NULL`, not omitted or defaulted to zero — same spirit as the gap
+  handling already decided for the chart screen (see
+  `spec/control/module/climatological_values.md`).
+- **No rainy-days column — decided:** the "total rainy days in the
+  imported period" metric is an aggregate over a job's whole date
+  range, not a per-day fact tied to one row of this table; it's
+  reported on the `metrics` job itself instead (`ingest_jobs.result`,
+  see below), not persisted here. See `spec/ingest/METRICS.md`.
+- **Upsert by (`station_code`, `date`)**: same load strategy as
+  `climatological_values` — insert if new, overwrite if the row
+  already exists (e.g. re-running a `metrics` job after a
+  `daily_values` re-import changed the underlying data).
+- **No change-history table**: same reasoning as
+  `climatological_values` — re-running a `metrics` job for a range
+  that overlaps existing rows is routine, not a rare event worth an
+  audit trail.
+
+### Pending decisions
+
+None.
+
 ## Table `config_values`
 
 Generic key-value store for operational configuration used across the
@@ -323,8 +385,8 @@ No natural key: each row is a job execution request, not an entity.
 | Column          | Type        | Null | Description                                                                 |
 |-----------------|-------------|------|--------------------------------------------------------------------------------|
 | `id`            | `bigint`    | No   | Auto-numbered technical identifier (primary key).                            |
-| `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`).      |
-| `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`). |
+| `job_type`      | `varchar`   | No   | Which ingestion script this job is for (e.g. `stations`, `daily_values`, `metrics`). |
+| `params`        | `jsonb`     | No   | Job-type-specific parameters (e.g. `{}` for `stations`; `{"station_code", "date_from", "date_to"}` for `daily_values`/`metrics`). |
 | `status`        | `varchar`   | No   | One of `pending`, `running`, `success`, `error`, `cancelled`. Defaults to `pending`. |
 | `created_at`    | `timestamp` | No   | Date/time the job was queued.                                                 |
 | `started_at`    | `timestamp` | Yes  | Date/time the worker claimed the job.                                         |
@@ -332,6 +394,7 @@ No natural key: each row is a job execution request, not an entity.
 | `rows_inserted` | `integer`   | Yes  | Rows inserted by the run, filled in by the worker when it finishes.           |
 | `rows_updated`  | `integer`   | Yes  | Rows updated by the run, filled in by the worker when it finishes.            |
 | `error_message` | `varchar`   | Yes  | Error detail, filled in by the worker if the run fails.                       |
+| `result`        | `jsonb`     | Yes  | Job-type-specific result detail beyond `rows_inserted`/`rows_updated`/`error_message` (e.g. `{"rainy_days": N}` for a `metrics` job, see `spec/ingest/METRICS.md`). `NULL` for job types that don't report anything beyond the common columns. |
 
 ### Design notes
 
@@ -346,6 +409,12 @@ No natural key: each row is a job execution request, not an entity.
   ingestion scripts be added without a schema migration — only a new
   `job_type` value and its own dispatch logic in the worker (see
   `spec/ingest/general.md`).
+- **`result` as `jsonb`, symmetric to `params`**: same reasoning —
+  different job types report different things beyond the common
+  `rows_inserted`/`rows_updated`/`error_message` (e.g. the `metrics`
+  job's rainy-days aggregate, see `spec/ingest/METRICS.md`), so a
+  flexible column avoids a schema change per job type that needs to
+  report something extra.
 - **`job_type` and `status` aren't DB-enforced (no `CHECK`/enum)**:
   same criteria as `control_users.login`'s email format — validated in
   the application layer (the jobs module's service when creating a

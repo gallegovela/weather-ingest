@@ -12,7 +12,7 @@ from psycopg.types.json import Jsonb
 
 _COLUMNS = """
     id, job_type, params, status, created_at, started_at, finished_at,
-    rows_inserted, rows_updated, error_message
+    rows_inserted, rows_updated, error_message, result
 """
 
 

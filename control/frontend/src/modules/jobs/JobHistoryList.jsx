@@ -22,7 +22,7 @@ const STATUS_COLORS = {
 // selection + "Delete selected" bulk action that also covers a single row
 // ("one action for one or many" -- decided in the spec, not a separate
 // per-row delete button).
-export function JobHistoryList({ queryKey, listFn, cancelFn, deleteFn, showStationColumn }) {
+export function JobHistoryList({ queryKey, listFn, cancelFn, deleteFn, showStationColumn, showRainyDaysColumn }) {
   const queryClient = useQueryClient();
 
   const [page, setPage] = useState(1);
@@ -127,6 +127,7 @@ export function JobHistoryList({ queryKey, listFn, cancelFn, deleteFn, showStati
             <Table.Th>Creado</Table.Th>
             <Table.Th>Insertadas</Table.Th>
             <Table.Th>Actualizadas</Table.Th>
+            {showRainyDaysColumn && <Table.Th>Días de lluvia</Table.Th>}
             <Table.Th>Error</Table.Th>
             <Table.Th />
           </Table.Tr>
@@ -145,6 +146,7 @@ export function JobHistoryList({ queryKey, listFn, cancelFn, deleteFn, showStati
               <Table.Td>{new Date(job.created_at).toLocaleString()}</Table.Td>
               <Table.Td>{job.rows_inserted ?? "—"}</Table.Td>
               <Table.Td>{job.rows_updated ?? "—"}</Table.Td>
+              {showRainyDaysColumn && <Table.Td>{job.result?.rainy_days ?? "—"}</Table.Td>}
               <Table.Td>{job.error_message ?? ""}</Table.Td>
               <Table.Td>
                 {job.status === "pending" && (

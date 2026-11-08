@@ -54,7 +54,9 @@ design).
 
 - The worker maps each `ingest_jobs.job_type` to the ingestion function
   that handles it (e.g. `stations` → `ingest.stations.run_import`,
-  `daily_values` → the future `ingest.daily_values.run_import`), a
+  `daily_values` → `ingest.daily_values.run_import`, `metrics` →
+  `ingest.metrics.run_import`, see
+  [`spec/ingest/METRICS.md`](./METRICS.md)), a
   function that takes the job's `params` (a `dict`, `{}` for `stations`
   since it takes none) and returns a result the worker turns into
   `rows_inserted`/`rows_updated` on the `ingest_jobs` row. Adding a new ingestion
@@ -64,10 +66,27 @@ design).
 - Each ingestion function keeps being responsible for its own
   transform/load, as today (`CLAUDE.md`, "Code conventions"); the
   worker's job is only to claim rows, invoke the right function, and
-  record the outcome (`rows_inserted`, `rows_updated`, `error_message`)
-  back on the `ingest_jobs` row. Any exception raised by an ingestion
-  function is caught by the worker, stored in `error_message`, and
-  marks the job `error` rather than crashing the worker loop.
+  record the outcome (`rows_inserted`, `rows_updated`, `error_message`,
+  `result`) back on the `ingest_jobs` row. Any exception raised by an
+  ingestion function is caught by the worker, stored in
+  `error_message`, and marks the job `error` rather than crashing the
+  worker loop.
+- **Automatic follow-up job — decided: `daily_values` queues a
+  `metrics` job on success.** When the worker finishes a `daily_values`
+  job with `success`, it queues (inserts a new `pending` row, doesn't
+  execute inline) a `metrics` job with the same `station_code`/
+  `date_from`/`date_to` — so the metrics derived from a station/range
+  are always kept in sync with the values that were just imported for
+  it, without the user having to launch both manually every time (see
+  [`spec/ingest/METRICS.md`](./METRICS.md)). Queuing rather than
+  running it inline preserves "exactly one job per loop iteration"
+  above. This applies to every successful `daily_values` job
+  regardless of how it was created (including one produced by the
+  Jobs module's range-splitting, see
+  `spec/control/module/jobs.md`) — there's no distinction between a
+  "manual" and a "split" run from the worker's point of view. A
+  `daily_values` job that ends in `error` or `cancelled` doesn't queue
+  a `metrics` job.
 
 ## Deployment
 

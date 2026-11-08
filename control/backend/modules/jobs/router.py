@@ -15,7 +15,7 @@ from core.auth import CurrentUser, get_current_user
 from core.db import get_db
 from core.schemas import Page
 from modules.jobs import service
-from modules.jobs.schemas import DailyValuesJobCreate, JobDeleteRequest, JobOut
+from modules.jobs.schemas import DailyValuesJobCreate, JobDeleteRequest, JobOut, MetricsJobCreate
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -23,12 +23,13 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 def _to_job_out(row: tuple) -> JobOut:
     (
         id_, job_type, params, job_status, created_at, started_at, finished_at,
-        rows_inserted, rows_updated, error_message,
+        rows_inserted, rows_updated, error_message, result,
     ) = row
     return JobOut(
         id=id_, job_type=job_type, params=params, status=job_status,
         created_at=created_at, started_at=started_at, finished_at=finished_at,
         rows_inserted=rows_inserted, rows_updated=rows_updated, error_message=error_message,
+        result=result,
     )
 
 
@@ -116,3 +117,51 @@ def delete_daily_values_jobs(
     conn: Connection = Depends(get_db),
 ):
     service.delete_jobs(conn, "daily_values", data.ids)
+
+
+@router.post("/metrics", response_model=JobOut, status_code=status.HTTP_201_CREATED)
+def create_metrics_job(
+    data: MetricsJobCreate,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    return _to_job_out(
+        service.create_metrics_job(conn, data.station_code, data.date_from, data.date_to)
+    )
+
+
+@router.get("/metrics", response_model=Page[JobOut])
+def list_metrics_jobs(
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+    created_at_from: date | None = None,
+    created_at_to: date | None = None,
+    station_code: str | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    filters = {
+        "status": status,
+        "created_at_from": created_at_from,
+        "created_at_to": created_at_to,
+        "station_code": station_code,
+    }
+    rows, total = service.list_jobs(conn, "metrics", page, page_size, filters)
+    return Page(items=[_to_job_out(r) for r in rows], total=total, page=page, page_size=page_size)
+
+
+@router.post("/metrics/{job_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_metrics_job(
+    job_id: int, user: CurrentUser = Depends(get_current_user), conn: Connection = Depends(get_db)
+):
+    service.cancel_job(conn, "metrics", job_id)
+
+
+@router.delete("/metrics", status_code=status.HTTP_204_NO_CONTENT)
+def delete_metrics_jobs(
+    data: JobDeleteRequest,
+    user: CurrentUser = Depends(get_current_user),
+    conn: Connection = Depends(get_db),
+):
+    service.delete_jobs(conn, "metrics", data.ids)
